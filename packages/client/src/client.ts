@@ -274,26 +274,32 @@ export class VaultClient {
             credential: null, // Will need to re-authenticate to get credential
           });
           return;
+        } else {
+          // Token rejected by server (expired, invalid, etc.)
+          // Clear local token and storage
+          this.tokenManager.clearToken();
+          this.clearUserFromStorage();
         }
       } catch {
-        // Token invalid, clear it
+        // Network error - keep token for offline use, but don't block
+        const user = this.loadUserFromStorage();
+        if (user) {
+          this.updateState({
+            isAuthenticated: true,
+            user,
+            isLoading: false,
+            error: null,
+            credential: null,
+          });
+          return;
+        }
       }
     }
 
-    // Try loading user from storage
-    const user = this.loadUserFromStorage();
-    if (user && this.tokenManager.isValid()) {
-      this.updateState({
-        isAuthenticated: true,
-        user,
-        isLoading: false,
-        error: null,
-        credential: null, // Will need to re-authenticate to get credential
-      });
-      return;
-    }
-
-    // Not authenticated
+    // Not authenticated - clear any stale data
+    this.tokenManager.clearToken();
+    this.clearUserFromStorage();
+    
     this.updateState({
       isAuthenticated: false,
       user: null,
