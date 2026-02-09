@@ -2,33 +2,36 @@
 
 ## Current Position
 - Milestone: v0.1.0
-- Phase: 5
-- Task: Starting sync engine
-- Status: Phase 4 complete, Phase 5 starting
+- Phase: 6
+- Task: Polish & Documentation
+- Status: Phase 5 complete, Phase 6 starting
 
 ## Active Context
-Building HTTP polling sync with offline queue and LWW conflict resolution.
+Final phase: README, examples, and npm publish preparation.
 
 ## Completed Phases
 - [x] Phase 1: Core Crypto (22 tests) ✅
 - [x] Phase 2: Zustand Middleware (10 tests) ✅
 - [x] Phase 3: Authentication (15 tests) ✅
 - [x] Phase 4: Backend API (18 tests) ✅
+- [x] Phase 5: Sync Engine (9 tests) ✅
 
 ## Test Summary
 | Package | Tests |
 |---------|-------|
 | @zod-vault/crypto | 22 |
-| @zod-vault/zustand | 10 |
+| @zod-vault/zustand | 19 |
 | @zod-vault/client | 15 |
 | @zod-vault/server | 18 |
-| **Total** | **65** |
+| **Total** | **74** |
 
-## Recent Decisions
-- 2026-02-09: Darika code style (double quotes, semicolons, Zod schemas)
-- 2026-02-09: better-sqlite3 for SQLite (simpler than Prisma)
-- 2026-02-09: JWT with jti for uniqueness
-- 2026-02-09: Typed error factories pattern
+## Bundle Sizes
+| Package | Size |
+|---------|------|
+| @zod-vault/crypto | ~15 KB |
+| @zod-vault/zustand | 11.90 KB |
+| @zod-vault/client | 20.03 KB |
+| @zod-vault/server | 20.58 KB |
 
 ## Commits
 | Hash | Description |
@@ -37,9 +40,10 @@ Building HTTP polling sync with offline queue and LWW conflict resolution.
 | e1df124 | Zustand middleware with proper types |
 | 709beb0 | Auth package complete |
 | b1263ad | Server package complete |
+| a373861 | Sync engine complete |
 
 ## Blockers
 - None
 
 ## Last Updated
-2026-02-09T15:52:00Z
+2026-02-09T16:04:00Z
