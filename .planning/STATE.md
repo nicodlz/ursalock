@@ -4,10 +4,10 @@
 - Milestone: v0.1.0
 - Phase: 6
 - Task: Polish & Documentation
-- Status: Phase 5 complete, Phase 6 starting
+- Status: In progress - README done, packages ready for npm
 
 ## Active Context
-Final phase: README, examples, and npm publish preparation.
+Phase 6: Documentation and npm publish prep.
 
 ## Completed Phases
 - [x] Phase 1: Core Crypto (22 tests) ✅
@@ -15,6 +15,15 @@ Final phase: README, examples, and npm publish preparation.
 - [x] Phase 3: Authentication (15 tests) ✅
 - [x] Phase 4: Backend API (18 tests) ✅
 - [x] Phase 5: Sync Engine (9 tests) ✅
+
+## Phase 6 Progress
+- [x] README.md rewritten (clean, no emoji abuse)
+- [x] Package.json metadata (author, homepage, bugs)
+- [x] Inter-package deps fixed for npm (file:../ → ^0.1.0)
+- [x] npm pack dry-run verified
+- [ ] Create docs/ folder content (optional)
+- [ ] Tag v0.1.0
+- [ ] npm publish
 
 ## Test Summary
 | Package | Tests |
@@ -25,13 +34,13 @@ Final phase: README, examples, and npm publish preparation.
 | @zod-vault/server | 18 |
 | **Total** | **74** |
 
-## Bundle Sizes
+## Bundle Sizes (gzipped)
 | Package | Size |
 |---------|------|
-| @zod-vault/crypto | ~15 KB |
-| @zod-vault/zustand | 11.90 KB |
-| @zod-vault/client | 20.03 KB |
-| @zod-vault/server | 20.58 KB |
+| @zod-vault/crypto | 3.5 KB |
+| @zod-vault/zustand | 5.7 KB |
+| @zod-vault/client | 6.6 KB |
+| @zod-vault/server | 8.0 KB |
 
 ## Commits
 | Hash | Description |
@@ -41,9 +50,10 @@ Final phase: README, examples, and npm publish preparation.
 | 709beb0 | Auth package complete |
 | b1263ad | Server package complete |
 | a373861 | Sync engine complete |
+| a10eef0 | Prepare packages for npm publish |
 
 ## Blockers
 - None
 
 ## Last Updated
-2026-02-09T16:04:00Z
+2026-02-09T16:20:00Z
