@@ -1,0 +1,49 @@
+/* Custom styles for zod-vault docs */
+
+:root {
+  --sl-color-accent-low: #1a1a2e;
+  --sl-color-accent: #4f46e5;
+  --sl-color-accent-high: #818cf8;
+  --sl-color-white: #ffffff;
+  --sl-color-gray-1: #f8fafc;
+  --sl-color-gray-2: #e2e8f0;
+  --sl-color-gray-3: #cbd5e1;
+  --sl-color-gray-4: #94a3b8;
+  --sl-color-gray-5: #64748b;
+  --sl-color-gray-6: #475569;
+  --sl-color-black: #0f172a;
+}
+
+:root[data-theme="dark"] {
+  --sl-color-accent-low: #1e1b4b;
+  --sl-color-accent: #6366f1;
+  --sl-color-accent-high: #a5b4fc;
+}
+
+/* Hero section styling */
+.hero-title {
+  font-size: 3rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--sl-color-accent) 0%, var(--sl-color-accent-high) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Code blocks */
+.expressive-code pre {
+  border-radius: 0.5rem;
+}
+
+/* Feature cards */
+.feature-card {
+  padding: 1.5rem;
+  border-radius: 0.75rem;
+  background: var(--sl-color-gray-6);
+  border: 1px solid var(--sl-color-gray-5);
+}
+
+[data-theme="light"] .feature-card {
+  background: var(--sl-color-gray-1);
+  border-color: var(--sl-color-gray-2);
+}

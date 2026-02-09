@@ -39,3 +39,4 @@ coverage/
 
 # Local planning notes (not tracked)
 .planning/*.local.md
+website/node_modules/

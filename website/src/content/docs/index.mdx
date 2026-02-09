@@ -1,0 +1,76 @@
+---
+title: zod-vault
+description: End-to-end encrypted cloud sync for Zustand stores
+template: splash
+hero:
+  tagline: Zero-knowledge encrypted sync for your Zustand stores. Self-hostable. Drop-in replacement for persist().
+  image:
+    file: ../../assets/logo-dark.svg
+  actions:
+    - text: Get Started
+      link: /guides/introduction/
+      icon: right-arrow
+      variant: primary
+    - text: View on GitHub
+      link: https://github.com/nicodlz/zod-vault
+      icon: external
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## Install
+
+```bash
+npm install @zod-vault/zustand @zod-vault/client @zod-vault/crypto
+```
+
+## Why zod-vault?
+
+<CardGrid stagger>
+  <Card title="Zero-Knowledge" icon="lock-closed">
+    Your data is encrypted client-side before it leaves the browser. The server only stores opaque blobs.
+  </Card>
+  <Card title="Drop-in Replacement" icon="puzzle">
+    Swap `persist()` for `vault()` and keep your existing store logic. One line change.
+  </Card>
+  <Card title="Self-Hostable" icon="server">
+    Single Docker image, SQLite storage. No external databases. Your data, your server.
+  </Card>
+  <Card title="Offline-First" icon="cloud">
+    Works without network. Changes queue locally and sync when you're back online.
+  </Card>
+</CardGrid>
+
+## Quick Example
+
+```typescript
+import { create } from "zustand";
+import { vault } from "@zod-vault/zustand";
+
+const useStore = create(
+  vault(
+    (set) => ({
+      notes: [] as string[],
+      addNote: (note: string) => set((s) => ({ notes: [...s.notes, note] })),
+    }),
+    {
+      name: "my-notes",
+      recoveryKey: "ABCD-EFGH-IJKL-MNOP-QRST-UVWX-YZ23-4567",
+      server: "https://vault.example.com",
+      getToken: () => client.getToken(),
+    }
+  )
+);
+
+// Sync across devices
+await useStore.vault.sync();
+```
+
+## Packages
+
+| Package | Description | Size |
+|---------|-------------|------|
+| `@zod-vault/crypto` | Encryption primitives (Argon2id, AES-256-GCM) | 3.5 KB |
+| `@zod-vault/zustand` | Zustand middleware | 5.7 KB |
+| `@zod-vault/client` | Auth client + React hooks | 6.6 KB |
+| `@zod-vault/server` | Self-hosted backend | 8.0 KB |
