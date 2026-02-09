@@ -175,7 +175,12 @@ describe('AES-256-GCM Encryption', () => {
 
   it('encrypts large payloads', async () => {
     const key = randomBytes(32)
-    const plaintext = randomBytes(1024 * 1024) // 1 MB
+    // Create 1MB payload by repeating a pattern (getRandomValues has 65KB limit)
+    const pattern = randomBytes(1024)
+    const plaintext = new Uint8Array(1024 * 1024)
+    for (let i = 0; i < plaintext.length; i += pattern.length) {
+      plaintext.set(pattern.slice(0, Math.min(pattern.length, plaintext.length - i)), i)
+    }
     
     const encrypted = await encrypt(plaintext, key)
     const decrypted = await decrypt(encrypted.combined, key)
