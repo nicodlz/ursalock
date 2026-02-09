@@ -29,6 +29,11 @@ pnpm-debug.log*
 # Test
 coverage/
 
+# SQLite databases
+*.db
+*.db-shm
+*.db-wal
+
 # Turbo
 .turbo/
 
