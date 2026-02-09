@@ -50,7 +50,7 @@ export async function encrypt(
   // Import key for Web Crypto
   const cryptoKey = await crypto.subtle.importKey(
     'raw',
-    key,
+    key.buffer as ArrayBuffer,
     { name: 'AES-GCM' },
     false,
     ['encrypt']
@@ -59,9 +59,9 @@ export async function encrypt(
   // Encrypt
   const ciphertext = new Uint8Array(
     await crypto.subtle.encrypt(
-      { name: 'AES-GCM', iv },
+      { name: 'AES-GCM', iv: iv as Uint8Array<ArrayBuffer> },
       cryptoKey,
-      plaintext
+      plaintext.buffer as ArrayBuffer
     )
   )
 
@@ -112,7 +112,7 @@ export async function decrypt(
   // Import key for Web Crypto
   const cryptoKey = await crypto.subtle.importKey(
     'raw',
-    key,
+    key.buffer as ArrayBuffer,
     { name: 'AES-GCM' },
     false,
     ['decrypt']
@@ -121,9 +121,9 @@ export async function decrypt(
   // Decrypt
   try {
     const plaintext = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv },
+      { name: 'AES-GCM', iv: iv as Uint8Array<ArrayBuffer> },
       cryptoKey,
-      ciphertext
+      ciphertext.buffer as ArrayBuffer
     )
     return new Uint8Array(plaintext)
   } catch (error) {
