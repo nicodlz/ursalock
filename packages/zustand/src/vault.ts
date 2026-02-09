@@ -194,7 +194,7 @@ const vaultImpl: VaultImpl = (config, baseOptions) => (set, get, api) => {
 
   // State
   let hasHydrated = false;
-  let localUpdatedAt = 0;
+  let localUpdatedAt = Date.now(); // Start with current time to prevent server overwrite on first sync
   const hydrationListeners = new Set<VaultListener<S>>();
   const finishHydrationListeners = new Set<VaultListener<S>>();
 
@@ -249,6 +249,9 @@ const vaultImpl: VaultImpl = (config, baseOptions) => (set, get, api) => {
         const parsed = JSON.parse(stored) as unknown;
         const merged = merge(parsed, get());
         set(merged, true);
+        // Set localUpdatedAt to current time after successful rehydration
+        // This ensures local data isn't overwritten by stale server data on first sync
+        localUpdatedAt = Date.now();
       }
       
       hasHydrated = true;

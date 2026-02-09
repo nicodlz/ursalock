@@ -147,7 +147,12 @@ export function createSyncEngine(options: SyncOptions) {
     if (!token) throw new Error("Not authenticated");
 
     // Try to get existing vault first
-    const existing = await fetchServer();
+    let existing: ServerVault | null = null;
+    try {
+      existing = await fetchServer();
+    } catch {
+      // Ignore fetch errors, try to create
+    }
     
     if (existing) {
       // Update existing vault
@@ -160,7 +165,10 @@ export function createSyncEngine(options: SyncOptions) {
         body: JSON.stringify({ data, salt }),
       });
 
-      if (!res.ok) throw new Error(`Server error: ${res.status}`);
+      if (!res.ok) {
+        const errorText = await res.text().catch(() => "");
+        throw new Error(`Server error: ${res.status} ${errorText}`);
+      }
       return res.json();
     }
 
@@ -191,11 +199,17 @@ export function createSyncEngine(options: SyncOptions) {
         body: JSON.stringify({ data, salt }),
       });
 
-      if (!retryRes.ok) throw new Error(`Server error: ${retryRes.status}`);
+      if (!retryRes.ok) {
+        const errorText = await retryRes.text().catch(() => "");
+        throw new Error(`Server error: ${retryRes.status} ${errorText}`);
+      }
       return retryRes.json();
     }
 
-    if (!createRes.ok) throw new Error(`Server error: ${createRes.status}`);
+    if (!createRes.ok) {
+      const errorText = await createRes.text().catch(() => "");
+      throw new Error(`Server error: ${createRes.status} ${errorText}`);
+    }
     return createRes.json();
   };
 
