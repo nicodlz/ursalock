@@ -1,0 +1,46 @@
+{
+  "name": "@zod-vault/crypto",
+  "version": "0.1.0",
+  "description": "E2EE crypto primitives for zod-vault",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "hash-wasm": "^4.11.0"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0"
+  },
+  "keywords": [
+    "encryption",
+    "e2ee",
+    "aes-256-gcm",
+    "argon2id",
+    "crypto",
+    "zero-knowledge"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nicodlz/zod-vault.git",
+    "directory": "packages/crypto"
+  }
+}
