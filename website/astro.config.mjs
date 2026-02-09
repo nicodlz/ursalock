@@ -23,7 +23,6 @@ export default defineConfig({
           attrs: { property: "og:image", content: "https://zod-vault.ndlz.net/og.png" },
         },
       ],
-      customCss: ["./src/styles/custom.css"],
       sidebar: [
         {
           label: "Getting Started",
