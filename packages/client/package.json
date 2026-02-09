@@ -1,6 +1,6 @@
 {
   "name": "@zod-vault/client",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Auth and API client for zod-vault",
   "type": "module",
   "main": "./dist/index.js",
