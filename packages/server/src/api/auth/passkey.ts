@@ -31,6 +31,7 @@ import { createToken, hashToken } from "#features/auth/jwt.js";
 import { errors, ApiException, type ApiError } from "#errors.js";
 import { env } from "#env.js";
 import { generateRecoveryKey } from "#features/crypto/recovery.js";
+import { getRpConfigFromRequest } from "#features/auth/origin.js";
 
 // In-memory challenge store (should use Redis in production)
 const challengeStore = new Map<string, { challenge: string; userId?: number; expiresAt: number }>();
@@ -86,9 +87,12 @@ export const passkeyRouter = new Hono()
       // Generate a temporary user ID for registration
       const tempUserId = crypto.randomUUID();
 
+      // Get RP config from request origin
+      const { rpId } = getRpConfigFromRequest(c);
+
       const options = await generateRegistrationOptions({
         rpName: env.RP_NAME,
-        rpID: env.RP_ID,
+        rpID: rpId,
         userName: email ?? tempUserId,
         userDisplayName: email ?? "Anonymous User",
         attestationType: "none",
@@ -135,12 +139,15 @@ export const passkeyRouter = new Hono()
         }
       }
 
+      // Get RP config from request origin
+      const { rpId, rpOrigin } = getRpConfigFromRequest(c);
+
       try {
         const verification = await verifyRegistrationResponse({
           response,
           expectedChallenge: stored.challenge,
-          expectedOrigin: env.RP_ORIGIN,
-          expectedRPID: env.RP_ID,
+          expectedOrigin: rpOrigin,
+          expectedRPID: rpId,
         });
 
         if (!verification.verified || !verification.registrationInfo) {
@@ -213,8 +220,11 @@ export const passkeyRouter = new Hono()
         }
       }
 
+      // Get RP config from request origin
+      const { rpId } = getRpConfigFromRequest(c);
+
       const options = await generateAuthenticationOptions({
-        rpID: env.RP_ID,
+        rpID: rpId,
         allowCredentials,
         userVerification: "preferred",
         timeout: 60000,
@@ -258,12 +268,15 @@ export const passkeyRouter = new Hono()
         throw new ApiException(errors.invalid_credentials as ApiError, 401);
       }
 
+      // Get RP config from request origin
+      const { rpId, rpOrigin } = getRpConfigFromRequest(c);
+
       try {
         const verification = await verifyAuthenticationResponse({
           response,
           expectedChallenge: storedChallenge,
-          expectedOrigin: env.RP_ORIGIN,
-          expectedRPID: env.RP_ID,
+          expectedOrigin: rpOrigin,
+          expectedRPID: rpId,
           authenticator: {
             credentialID: passkey.credentialId,
             credentialPublicKey: Buffer.from(passkey.publicKey, "base64"),

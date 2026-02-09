@@ -13,6 +13,7 @@ export const ErrorCode = z.enum([
   "email_already_exists",
   "passkey_not_found",
   "session_expired",
+  "invalid_origin",
   
   // Vault errors
   "vault_not_found",
@@ -55,6 +56,7 @@ export const errors = {
   email_already_exists: { code: "email_already_exists" as const, message: "Email already registered" },
   passkey_not_found: { code: "passkey_not_found" as const, message: "Passkey not found" },
   session_expired: { code: "session_expired" as const, message: "Session expired" },
+  invalid_origin: { code: "invalid_origin" as const, message: "Origin not allowed" },
   
   // Vault errors
   vault_not_found: { code: "vault_not_found" as const, message: "Vault not found" },

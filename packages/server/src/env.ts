@@ -20,14 +20,15 @@ const envSchema = {
   /** JWT token expiry in seconds (default: 7 days) */
   JWT_EXPIRY: numeric.default("604800"),
   
-  /** Relying Party ID for WebAuthn (your domain) */
-  RP_ID: z.string().default("localhost"),
-  
   /** Relying Party name shown during passkey registration */
   RP_NAME: z.string().default("zod-vault"),
   
-  /** Expected origin for WebAuthn (e.g., https://app.example.com) */
-  RP_ORIGIN: z.string().url().default("http://localhost:5173"),
+  /** 
+   * Allowed origins for WebAuthn (comma-separated)
+   * e.g., "https://app1.example.com,https://app2.example.com"
+   * The RP_ID is derived from the hostname of the validated origin
+   */
+  RP_ORIGINS: z.string().default("http://localhost:5173"),
 };
 
 type Env = {
