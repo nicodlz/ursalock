@@ -3,7 +3,7 @@ title: Security Model
 description: How zod-vault keeps your data safe
 ---
 
-zod-vault uses a zero-knowledge architecture. The server cannot read your data.
+zod-vault uses a zero-knowledge architecture with passkey-derived encryption keys.
 
 ## Threat Model
 
@@ -13,12 +13,13 @@ zod-vault uses a zero-knowledge architecture. The server cannot read your data.
 - **Database leaks** — Only encrypted blobs stored
 - **Man-in-the-middle** — HTTPS + client-side encryption
 - **Unauthorized access** — JWT auth + user isolation
+- **Key recovery requests** — No backdoors, no "forgot password"
 
 ### NOT Protected Against
 
 - **Client-side compromise** — Malware on user's device
-- **Recovery key theft** — If someone has your key, they decrypt
-- **Weak recovery keys** — Always use `generateRecoveryKey()`
+- **Passkey theft** — Physical access to your unlocked device
+- **Passkey provider breach** — If iCloud/Google/Proton Pass is compromised
 
 ## Encryption
 
@@ -27,19 +28,19 @@ zod-vault uses a zero-knowledge architecture. The server cannot read your data.
 - 256-bit key size
 - Authenticated encryption (integrity + confidentiality)
 - NIST approved, widely audited
-- Web Crypto API (native browser/Node.js)
+- Web Crypto API (native browser)
 
-### Key Derivation: Argon2id
+### Key Derivation: WebAuthn PRF
 
-- Memory-hard (resistant to GPU/ASIC attacks)
-- OWASP 2024 recommended parameters:
+The encryption key (`cipherJwk`) is derived from your passkey using the **PRF extension**:
 
 ```
-memory: 64 MB
-iterations: 3
-parallelism: 4
-hashLength: 32 bytes
+Passkey → WebAuthn PRF → HKDF → cipherJwk (AES-256 key)
 ```
+
+- PRF outputs are deterministic for the same passkey
+- Same passkey = same cipherJwk = same decryption
+- Different passkey = different cipherJwk = can't decrypt
 
 ## Data Flow
 
@@ -47,7 +48,7 @@ hashLength: 32 bytes
 ┌─────────────────────────────────────────────────┐
 │                   CLIENT                         │
 │                                                 │
-│  Recovery Key + Salt → Argon2id → AES Key      │
+│  Passkey → PRF → HKDF → cipherJwk (JWK)        │
 │                           ↓                     │
 │  Plaintext → AES-256-GCM → Encrypted Blob      │
 │                                                 │
@@ -57,65 +58,108 @@ hashLength: 32 bytes
 ┌─────────────────────────────────────────────────┐
 │                   SERVER                         │
 │                                                 │
-│  Stores: { blob, salt, metadata }               │
+│  Stores: { userId: opaqueId, blob, updatedAt }  │
 │  Knows: NOTHING about your data                 │
 │                                                 │
 └─────────────────────────────────────────────────┘
 ```
 
+## Identity: opaqueId
+
+Your user identity is a hash of your passkey's `rawId`:
+
+```typescript
+opaqueId = SHA-256(credential.rawId)
+```
+
+The server never sees your actual passkey — only this opaque identifier.
+
 ## What the Server Stores
 
 | Data | Encrypted? | Notes |
 |------|------------|-------|
-| User email | No | Needed for login |
-| Password hash | Hashed | Argon2id |
-| Vault data | Yes | Opaque blob |
-| Vault salt | No | Useless without key |
-| Timestamps | No | For sync |
+| opaqueId | Hashed | SHA-256 of passkey rawId |
+| Vault blob | Yes | AES-256-GCM encrypted |
+| updatedAt | No | Timestamp for sync |
+
+That's it. No email, no password hash, no personal info.
 
 ## What the Server Cannot Do
 
 - Read vault contents
-- Recover data without recovery key
-- Decrypt even with database access
-- Impersonate users
+- Recover data without your passkey
+- Decrypt even with full database access
+- Know who you are (opaqueId is opaque)
+- Reset your "password" (there isn't one)
 
 ## Authentication
 
+### Passkey (WebAuthn)
+
+- Hardware-backed (Secure Enclave, TPM)
+- Phishing-resistant (bound to origin)
+- No passwords to type or remember
+- PRF extension for key derivation
+
 ### JWT Tokens
 
-- Access token: 15 min expiry
-- Refresh token: 7 day expiry
-- Unique `jti` claim (no replay)
-- Refresh rotation
+- Short-lived access tokens (15 min)
+- Stored in localStorage
+- Used for server API calls
+- Refresh not needed (re-auth with passkey instead)
 
-### Password Hashing
+## Session Security
 
-```
-Argon2id
-memory: 64 MB
-iterations: 3
-parallelism: 4
-```
+| What | Stored Where | Survives Refresh |
+|------|--------------|------------------|
+| JWT | localStorage | ✅ Yes |
+| cipherJwk | memory only | ❌ No |
 
-### Passkeys (WebAuthn)
+The `cipherJwk` is **never** stored. After page refresh, users must re-authenticate with their passkey to re-derive it.
 
-- Hardware-backed
-- Phishing-resistant
-- Recommended over passwords
+This is a security feature, not a bug.
+
+## Cross-Device Sync
+
+Passkeys sync via your passkey provider:
+
+| Provider | Syncs | Same rawId |
+|----------|-------|------------|
+| iCloud Keychain | ✅ | ✅ |
+| Google Password Manager | ✅ | ✅ |
+| Proton Pass | ✅ | ✅ |
+| Hardware key | ❌ | ❌ |
+
+If your provider syncs the passkey, you get the same `rawId` → same `opaqueId` → same user → same data.
+
+## PRF Extension Requirements
+
+The WebAuthn PRF extension is required for key derivation:
+
+- **Chrome 116+** (August 2023)
+- **Safari 17+** (September 2023)
+- **Firefox** — Not supported yet
+
+On unsupported browsers, passkey auth may work but key derivation won't.
 
 ## Audit
 
-The crypto is ~300 lines of TypeScript:
+The crypto uses standard Web APIs:
 
-```bash
-git clone https://github.com/nicodlz/zod-vault
-cat packages/crypto/src/*.ts | wc -l
+```typescript
+// Key derivation
+const prfOutput = credential.getClientExtensionResults().prf;
+const cipherKey = await crypto.subtle.importKey(...);
+
+// Encryption
+const encrypted = await crypto.subtle.encrypt(
+  { name: "AES-GCM", iv },
+  cipherKey,
+  plaintext
+);
 ```
 
-Uses:
-- Web Crypto API (native, no custom crypto)
-- `hash-wasm` for Argon2id (audited WASM)
+No custom crypto. No dependencies for core encryption.
 
 ## Reporting Vulnerabilities
 

@@ -1,9 +1,20 @@
 ---
-title: Recovery Key
-description: Understanding and managing your recovery key
+title: Recovery Key (Legacy)
+description: Alternative encryption using a recovery key instead of passkeys
 ---
 
-The recovery key is the master encryption key for your data.
+:::caution
+Recovery keys are the **legacy** approach. New apps should use [passkey-based encryption](/guides/authentication/) for better UX.
+:::
+
+If you can't use passkeys (no WebAuthn PRF support, need offline-only mode), you can use a recovery key.
+
+## When to Use Recovery Keys
+
+- Browser doesn't support WebAuthn PRF
+- Need encryption without any server
+- Want explicit control over the key
+- Migrating from an older version
 
 ## Format
 
@@ -16,15 +27,6 @@ ABCD-EFGH-IJKL-MNOP-QRST-UVWX-YZ23-4567-ABCD-EFGH-IJKL-MNOP-Q
 - ~256 bits of entropy
 - Human-readable (no confusable chars like 0/O, 1/I)
 
-## Properties
-
-| Property | Value |
-|----------|-------|
-| User-controlled | Only you know it |
-| Not transmitted | Never sent to server |
-| Not recoverable | Server cannot help if lost |
-| Portable | Works across devices |
-
 ## Generating a Key
 
 ```typescript
@@ -35,25 +37,47 @@ const recoveryKey = generateRecoveryKey();
 
 Uses `crypto.getRandomValues()` for cryptographic randomness.
 
-## Validating a Key
+## Using with Vault
 
 ```typescript
-import { validateRecoveryKey } from "@zod-vault/crypto";
+import { create } from "zustand";
+import { vault, type VaultOptionsLegacy } from "@zod-vault/zustand";
 
-if (validateRecoveryKey(userInput)) {
-  // Valid format
-}
+const options: VaultOptionsLegacy<MyState> = {
+  name: "my-store",
+  recoveryKey: "ABCD-EFGH-IJKL-MNOP-QRST-UVWX-YZ23-4567-ABCD-EFGH-IJKL-MNOP-Q",
+  // Optional: add server sync
+  server: "https://vault.example.com",
+  getToken: () => authToken,
+};
+
+const useStore = create(vault(storeCreator, options));
+```
+
+## Key Derivation
+
+With recovery keys, the encryption key is derived using Argon2id:
+
+```
+Recovery Key + Salt → Argon2id → AES-256 Key
+```
+
+Parameters (OWASP 2024):
+
+```
+memory: 64 MB
+iterations: 3
+parallelism: 4
+hashLength: 32 bytes
 ```
 
 ## Storage Recommendations
 
 ### Password Manager
 
-Store in your password manager (1Password, Bitwarden, etc).
+Store in 1Password, Bitwarden, Proton Pass, etc.
 
 ### Printed Backup
-
-Print and store in a safe location:
 
 ```
 ╔═══════════════════════════════════════════════════╗
@@ -67,42 +91,13 @@ Print and store in a safe location:
 ╚═══════════════════════════════════════════════════╝
 ```
 
-### Split Storage
-
-For high security, split the key:
-
-```typescript
-const key = "ABCD-EFGH-IJKL-MNOP-QRST-UVWX-YZ23-4567-ABCD-EFGH-IJKL-MNOP-Q";
-
-// Store separately
-const part1 = key.slice(0, 26);  // First half
-const part2 = key.slice(26);      // Second half
-```
-
 ## What NOT to Do
 
-- Store unencrypted on cloud storage
+- Store unencrypted in cloud storage
 - Email to yourself
 - Share via unencrypted chat
-- Use a weak/guessable key
+- Use a guessable key
 - Reuse across different vaults
-
-## Key Per Vault
-
-Consider separate keys for different vaults:
-
-```typescript
-const personalKey = generateRecoveryKey();
-const workKey = generateRecoveryKey();
-
-// Personal vault
-vault(config, { name: "personal", recoveryKey: personalKey });
-
-// Work vault  
-vault(config, { name: "work", recoveryKey: workKey });
-```
-
-Compromise of one key doesn't affect the other.
 
 ## Lost Key
 
@@ -110,36 +105,38 @@ If you lose your recovery key:
 
 1. Your data **cannot be recovered**
 2. The server cannot help (zero-knowledge)
-3. Create a new vault with a new key
-4. Start fresh
+3. Start fresh with a new key
 
 This is by design — true E2EE means no backdoors.
 
-## Rotating Keys
+## Migrating to Passkeys
 
-To change your recovery key:
-
-1. Generate new key
-2. Decrypt data with old key
-3. Re-encrypt with new key
-4. Update vault on server
+If you started with a recovery key and want to switch to passkeys:
 
 ```typescript
-// Manual rotation
-const oldData = await useStore.vault.pull();
-const newKey = generateRecoveryKey();
+// 1. Pull data with old key
+const oldStore = create(vault(storeCreator, {
+  name: "old-vault",
+  recoveryKey: oldKey,
+}));
+await oldStore.vault.pull();
+const data = oldStore.getState();
 
-// Create new store with new key
-const newStore = create(
-  vault(config, { 
-    name: "migrated-store", 
-    recoveryKey: newKey 
-  })
-);
-
-newStore.setState(oldData);
+// 2. Create new store with passkey
+const newStore = createStoreWithPasskey(cipherJwk);
+newStore.setState(data);
 await newStore.vault.push();
 
-// Clear old vault
-await useStore.vault.clearStorage();
+// 3. Clear old vault
+await oldStore.vault.clearStorage();
 ```
+
+## Passkeys vs Recovery Keys
+
+| Aspect | Passkeys | Recovery Keys |
+|--------|----------|---------------|
+| UX | Tap to authenticate | Remember/store a key |
+| Cross-device | Via passkey provider | Manual key entry |
+| Lost key | Re-register passkey | Data lost forever |
+| Offline-only | Needs server for auth | Works fully offline |
+| Browser support | Chrome 116+, Safari 17+ | All browsers |

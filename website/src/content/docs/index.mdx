@@ -3,7 +3,7 @@ title: zod-vault
 description: End-to-end encrypted cloud sync for Zustand stores
 template: splash
 hero:
-  tagline: Zero-knowledge encrypted sync for your Zustand stores. Self-hostable. Drop-in replacement for persist().
+  tagline: Passkey-powered E2EE sync for Zustand. No recovery key. Self-hostable.
   image:
     file: ../../assets/logo-dark.svg
   actions:
@@ -27,50 +27,73 @@ npm install @zod-vault/zustand @zod-vault/client @zod-vault/crypto
 ## Why zod-vault?
 
 <CardGrid stagger>
-  <Card title="Zero-Knowledge" icon="lock-closed">
-    Your data is encrypted client-side before it leaves the browser. The server only stores opaque blobs.
+  <Card title="Passkey = Key" icon="lock-closed">
+    Your passkey derives the encryption key via WebAuthn PRF. No recovery key to lose or store.
   </Card>
-  <Card title="Drop-in Replacement" icon="puzzle">
-    Swap `persist()` for `vault()` and keep your existing store logic. One line change.
+  <Card title="Zero-Knowledge" icon="shield-check">
+    Data encrypted client-side before leaving browser. Server stores opaque blobs only.
+  </Card>
+  <Card title="Cross-Device Sync" icon="cloud">
+    Same passkey = same encryption key. Sync seamlessly across devices.
   </Card>
   <Card title="Self-Hostable" icon="server">
-    Single Docker image, SQLite storage. No external databases. Your data, your server.
-  </Card>
-  <Card title="Offline-First" icon="cloud">
-    Works without network. Changes queue locally and sync when you're back online.
+    Single Docker image, SQLite storage. Your data, your server.
   </Card>
 </CardGrid>
 
 ## Quick Example
 
 ```typescript
-import { create } from "zustand";
-import { vault } from "@zod-vault/zustand";
+import { create, type StateCreator } from "zustand";
+import { vault, type VaultOptionsJwk } from "@zod-vault/zustand";
+import type { CipherJWK } from "@zod-vault/crypto";
 
-const useStore = create(
-  vault(
-    (set) => ({
-      notes: [] as string[],
-      addNote: (note: string) => set((s) => ({ notes: [...s.notes, note] })),
-    }),
-    {
-      name: "my-notes",
-      recoveryKey: "ABCD-EFGH-IJKL-MNOP-QRST-UVWX-YZ23-4567",
-      server: "https://vault.example.com",
-      getToken: () => client.getToken(),
-    }
-  )
-);
+interface NotesState {
+  notes: string[];
+  addNote: (note: string) => void;
+}
+
+// After passkey authentication, you get a cipherJwk
+function createStore(cipherJwk: CipherJWK) {
+  const storeCreator: StateCreator<NotesState> = (set) => ({
+    notes: [],
+    addNote: (note) => set((s) => ({ notes: [...s.notes, note] })),
+  });
+
+  return create(vault(storeCreator, {
+    name: "my-notes",
+    cipherJwk,
+    server: "https://vault.example.com",
+    getToken: () => client.getToken(),
+  }));
+}
 
 // Sync across devices
-await useStore.vault.sync();
+await store.vault.sync();
+```
+
+## Auth Flow
+
+```typescript
+import { useSignIn } from "@zod-vault/client";
+
+const { signIn } = useSignIn(vaultClient);
+
+// User taps passkey
+const result = await signIn({ usePasskey: true });
+
+if (result.success) {
+  // result.credential.cipherJwk → encryption key
+  // result.credential.jwt → auth token
+  initStore(result.credential.cipherJwk);
+}
 ```
 
 ## Packages
 
 | Package | Description | Size |
 |---------|-------------|------|
-| `@zod-vault/crypto` | Encryption primitives (Argon2id, AES-256-GCM) | 3.5 KB |
-| `@zod-vault/zustand` | Zustand middleware | 5.7 KB |
-| `@zod-vault/client` | Auth client + React hooks | 6.6 KB |
-| `@zod-vault/server` | Self-hosted backend | 8.0 KB |
+| `@zod-vault/crypto` | Encryption primitives (AES-256-GCM) | ~4 KB |
+| `@zod-vault/zustand` | Zustand middleware | ~6 KB |
+| `@zod-vault/client` | Auth client + React hooks | ~7 KB |
+| `@zod-vault/server` | Self-hosted backend | ~8 KB |

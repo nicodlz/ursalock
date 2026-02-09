@@ -3,165 +3,242 @@ title: "@zod-vault/zustand"
 description: Zustand middleware API reference
 ---
 
-The main package — encrypted persistence middleware for Zustand.
+Encrypted persistence middleware for Zustand stores.
+
+## Installation
+
+```bash
+npm install @zod-vault/zustand @zod-vault/crypto zustand
+```
 
 ## vault
 
-Middleware that adds encrypted persistence and cloud sync.
+The main middleware that adds encrypted persistence and cloud sync.
 
 ```typescript
-import { create } from "zustand";
-import { vault } from "@zod-vault/zustand";
+import { create, type StateCreator } from "zustand";
+import { vault, type VaultOptionsJwk } from "@zod-vault/zustand";
+import type { CipherJWK } from "@zod-vault/crypto";
 
-const useStore = create(
-  vault(
-    (set, get) => ({
-      count: 0,
-      increment: () => set((s) => ({ count: s.count + 1 })),
-    }),
-    {
-      name: "my-store",
-      recoveryKey: "ABCD-EFGH-...",
-    }
-  )
-);
+interface MyState {
+  count: number;
+  increment: () => void;
+}
+
+function createStore(cipherJwk: CipherJWK) {
+  const storeCreator: StateCreator<MyState> = (set) => ({
+    count: 0,
+    increment: () => set((s) => ({ count: s.count + 1 })),
+  });
+
+  const options: VaultOptionsJwk<MyState> = {
+    name: "my-store",
+    cipherJwk,
+    server: "https://vault.example.com",
+    getToken: () => getAuthToken(),
+  };
+
+  return create(vault(storeCreator, options));
+}
 ```
 
-### Options
+## VaultOptionsJwk
+
+Options for the vault middleware using a JWK encryption key (derived from passkey).
 
 | Option | Type | Required | Default | Description |
 |--------|------|----------|---------|-------------|
 | `name` | `string` | Yes | - | Unique identifier for this vault |
-| `recoveryKey` | `string` | Yes | - | Encryption key |
+| `cipherJwk` | `CipherJWK` | Yes | - | JWK encryption key from passkey PRF |
 | `server` | `string` | No | - | Server URL for cloud sync |
-| `getToken` | `() => string \| null` | No* | - | Auth token getter (*required if server set) |
+| `getToken` | `() => string \| null` | No* | - | Auth token getter (*required with server) |
 | `partialize` | `(state) => partial` | No | `(s) => s` | Select which state to persist |
-| `merge` | `(persisted, current) => merged` | No | `Object.assign` | How to merge persisted state |
+| `merge` | `(persisted, current) => merged` | No | shallow merge | How to merge persisted state |
 | `skipHydration` | `boolean` | No | `false` | Skip auto-hydration on init |
-| `syncInterval` | `number` | No | `30000` | Auto-sync interval (0 to disable) |
-| `storage` | `VaultStorage` | No | localStorage | Custom storage implementation |
-| `prefix` | `string` | No | `zod-vault:` | Storage key prefix |
+| `syncInterval` | `number` | No | `30000` | Auto-sync interval in ms (0 to disable) |
+| `storage` | `VaultStorage` | No | localStorage | Custom storage backend |
+| `prefix` | `string` | No | `"zod-vault:"` | Storage key prefix |
 | `onRehydrateStorage` | `(state) => callback` | No | - | Hydration lifecycle hook |
 
-### Store Extensions
+### Example with All Options
+
+```typescript
+const options: VaultOptionsJwk<MyState, PersistedState> = {
+  name: "my-store",
+  cipherJwk,
+  
+  // Cloud sync
+  server: "https://vault.example.com",
+  getToken: () => vaultClient.getToken(),
+  syncInterval: 60000, // Sync every minute
+  
+  // Partial persistence
+  partialize: (state) => ({
+    notes: state.notes,
+    settings: state.settings,
+    // Don't persist UI state like currentNoteId
+  }),
+  
+  // Custom merge
+  merge: (persisted, current) => ({
+    ...current,
+    ...persisted,
+    // Always use current UI state
+    isLoading: current.isLoading,
+  }),
+  
+  // Lifecycle
+  skipHydration: false,
+  onRehydrateStorage: () => (state, error) => {
+    if (error) console.error("Hydration failed:", error);
+    else console.log("Hydrated:", state);
+  },
+};
+```
+
+## Store Extensions
 
 The middleware adds a `vault` object to the store:
 
 ```typescript
-useStore.vault.sync()
-useStore.vault.push()
-useStore.vault.pull()
-useStore.vault.rehydrate()
-useStore.vault.hasHydrated()
-useStore.vault.getSyncStatus()
-useStore.vault.hasPendingChanges()
-useStore.vault.clearStorage()
-useStore.vault.onHydrate(callback)
-useStore.vault.onFinishHydration(callback)
+const store = create(vault(storeCreator, options));
+
+// Access vault methods
+store.vault.sync();
+store.vault.push();
+store.vault.pull();
+store.vault.rehydrate();
+store.vault.hasHydrated();
+store.vault.getSyncStatus();
+store.vault.hasPendingChanges();
+store.vault.clearStorage();
+store.vault.onHydrate(callback);
+store.vault.onFinishHydration(callback);
 ```
 
-## vault.sync
+## vault.sync()
 
 Full bidirectional sync with server.
 
 ```typescript
-await useStore.vault.sync();
+await store.vault.sync();
 ```
 
-Pushes local changes, pulls remote changes, merges with LWW.
+1. Pushes local state (encrypted) to server
+2. Pulls latest from server
+3. Merges using Last-Write-Wins
 
-## vault.push
+## vault.push()
 
 Push local state to server.
 
 ```typescript
-await useStore.vault.push();
+await store.vault.push();
 ```
 
-## vault.pull
+## vault.pull()
 
 Pull latest state from server.
 
 ```typescript
-const hasChanges = await useStore.vault.pull();
-// => true if server had newer data
+const hasChanges = await store.vault.pull();
+// Returns true if server had newer data
 ```
 
-## vault.rehydrate
+## vault.rehydrate()
 
 Reload state from local storage.
 
 ```typescript
-await useStore.vault.rehydrate();
+await store.vault.rehydrate();
 ```
 
-## vault.hasHydrated
+## vault.hasHydrated()
 
 Check if initial hydration is complete.
 
 ```typescript
-if (useStore.vault.hasHydrated()) {
-  // Safe to use store
+if (store.vault.hasHydrated()) {
+  // Safe to read store
 }
 ```
 
-## vault.getSyncStatus
+## vault.getSyncStatus()
 
 Get current sync status.
 
 ```typescript
-const status = useStore.vault.getSyncStatus();
+const status = store.vault.getSyncStatus();
 // "idle" | "syncing" | "synced" | "error" | "offline"
 ```
 
-## vault.hasPendingChanges
+## vault.hasPendingChanges()
 
-Check if offline queue has pending changes.
+Check if there are unsynced local changes.
 
 ```typescript
-if (useStore.vault.hasPendingChanges()) {
-  // Changes waiting to sync
+if (store.vault.hasPendingChanges()) {
+  await store.vault.push();
 }
 ```
 
-## vault.clearStorage
+## vault.clearStorage()
 
-Delete all stored data (local and server).
+Delete all local and server data for this vault.
 
 ```typescript
-await useStore.vault.clearStorage();
+await store.vault.clearStorage();
 ```
 
-## vault.onHydrate
+## vault.onHydrate()
 
 Subscribe to hydration start.
 
 ```typescript
-const unsubscribe = useStore.vault.onHydrate((state) => {
+const unsubscribe = store.vault.onHydrate((state) => {
   console.log("Hydration starting");
 });
 ```
 
-## vault.onFinishHydration
+## vault.onFinishHydration()
 
 Subscribe to hydration complete.
 
 ```typescript
-const unsubscribe = useStore.vault.onFinishHydration((state) => {
-  console.log("Hydration complete", state);
+const unsubscribe = store.vault.onFinishHydration((state) => {
+  console.log("Hydrated:", state);
 });
+```
+
+## useSyncStatus Hook
+
+React hook for sync status with auto-updates.
+
+```typescript
+import { useSyncStatus } from "@zod-vault/zustand";
+
+function SyncIndicator() {
+  const status = useSyncStatus(store);
+  
+  return <span>Status: {status}</span>;
+}
 ```
 
 ## Types
 
 ```typescript
-import type { VaultOptions, SyncStatus } from "@zod-vault/zustand";
+import type {
+  VaultOptionsJwk,
+  VaultOptionsLegacy,
+  SyncStatus,
+  VaultStorage,
+} from "@zod-vault/zustand";
 
 type SyncStatus = "idle" | "syncing" | "synced" | "error" | "offline";
 
-interface VaultOptions<S, PersistedState = S> {
+interface VaultOptionsJwk<S, PersistedState = S> {
   name: string;
-  recoveryKey: string;
+  cipherJwk: CipherJWK;
   server?: string;
   getToken?: () => string | null;
   partialize?: (state: S) => PersistedState;
@@ -171,5 +248,54 @@ interface VaultOptions<S, PersistedState = S> {
   storage?: VaultStorage;
   prefix?: string;
   onRehydrateStorage?: (state: S) => ((state?: S, error?: unknown) => void) | void;
+}
+
+// For CipherJWK type
+import type { CipherJWK } from "@zod-vault/crypto";
+```
+
+## VaultOptionsLegacy (Deprecated)
+
+For backward compatibility, you can use a recovery key string instead of cipherJwk:
+
+```typescript
+import type { VaultOptionsLegacy } from "@zod-vault/zustand";
+
+const options: VaultOptionsLegacy<MyState> = {
+  name: "my-store",
+  recoveryKey: "ABCD-EFGH-...", // 52-char recovery key
+  // ... other options
+};
+```
+
+**Note**: The passkey-based `VaultOptionsJwk` is recommended for new apps.
+
+## createVaultStorage
+
+Create a custom encrypted storage backend.
+
+```typescript
+import { createVaultStorage, type JwkEncryptedStorageOptions } from "@zod-vault/zustand";
+
+const storage = createVaultStorage({
+  cipherJwk,
+  prefix: "my-app:",
+  storage: sessionStorage, // Use sessionStorage instead of localStorage
+});
+```
+
+## Error Handling
+
+```typescript
+try {
+  await store.vault.sync();
+} catch (error) {
+  if (error.message.includes("vault_already_exists")) {
+    // Pull first, then push
+    await store.vault.pull();
+  } else if (error.message.includes("401")) {
+    // Token expired, re-authenticate
+    await refreshAuth();
+  }
 }
 ```

@@ -3,7 +3,7 @@ title: Quick Start
 description: Get up and running with zod-vault in 5 minutes
 ---
 
-This guide walks you through setting up zod-vault in a React application.
+This guide walks you through setting up zod-vault in a React application with passkey-based E2EE.
 
 ## Installation
 
@@ -11,22 +11,19 @@ This guide walks you through setting up zod-vault in a React application.
 npm install @zod-vault/zustand @zod-vault/client @zod-vault/crypto
 ```
 
-## 1. Generate a Recovery Key
+## How It Works
+
+1. User authenticates with a **passkey** (WebAuthn)
+2. The passkey derives a **cipherJwk** using WebAuthn PRF extension
+3. Your Zustand store is **encrypted** with this key
+4. Data syncs to the server (encrypted) and across devices
+
+Same passkey = same encryption key = same data on any device.
+
+## 1. Setup the Auth Client
 
 ```typescript
-import { generateRecoveryKey } from "@zod-vault/crypto";
-
-const recoveryKey = generateRecoveryKey();
-console.log(recoveryKey);
-// => "ABCD-EFGH-IJKL-MNOP-QRST-UVWX-YZ23-4567-ABCD-EFGH-IJKL-MNOP-Q"
-```
-
-Store this key safely. It's the only way to decrypt your data.
-
-## 2. Setup the Auth Client
-
-```typescript
-// lib/vault.ts
+// lib/vault-client.ts
 import { VaultClient } from "@zod-vault/client";
 
 export const vaultClient = new VaultClient({
@@ -34,154 +31,196 @@ export const vaultClient = new VaultClient({
 });
 ```
 
-## 3. Create an Encrypted Store
+## 2. Create an Encrypted Store
 
 ```typescript
 // stores/notes.ts
-import { create } from "zustand";
-import { vault } from "@zod-vault/zustand";
-import { vaultClient } from "../lib/vault";
+import { create, type StateCreator } from "zustand";
+import { vault, type VaultOptionsJwk } from "@zod-vault/zustand";
+import type { CipherJWK } from "@zod-vault/crypto";
+import { vaultClient } from "../lib/vault-client";
 
 interface NotesState {
   notes: string[];
   addNote: (note: string) => void;
-  removeNote: (index: number) => void;
 }
 
-export const useNotes = create(
-  vault<NotesState>(
-    (set) => ({
-      notes: [],
-      addNote: (note) => set((s) => ({ notes: [...s.notes, note] })),
-      removeNote: (index) =>
-        set((s) => ({ notes: s.notes.filter((_, i) => i !== index) })),
-    }),
-    {
-      name: "notes",
-      recoveryKey: process.env.NEXT_PUBLIC_RECOVERY_KEY!,
-      server: "https://vault.example.com",
-      getToken: () => vaultClient.getToken(),
-    }
-  )
-);
+// Store factory - needs cipherJwk from authentication
+export function createNotesStore(cipherJwk: CipherJWK) {
+  const storeCreator: StateCreator<NotesState> = (set) => ({
+    notes: [],
+    addNote: (note) => set((s) => ({ notes: [...s.notes, note] })),
+  });
+
+  const options: VaultOptionsJwk<NotesState> = {
+    name: "my-notes",
+    cipherJwk,
+    server: "https://vault.example.com",
+    getToken: () => {
+      const header = vaultClient.getAuthHeader();
+      return header["Authorization"]?.replace("Bearer ", "") ?? null;
+    },
+    syncInterval: 30000, // Auto-sync every 30s
+  };
+
+  return create(vault(storeCreator, options));
+}
+
+// Store instance - initialized after auth
+let notesStore: ReturnType<typeof createNotesStore> | null = null;
+
+export function initNotesStore(cipherJwk: CipherJWK) {
+  notesStore = createNotesStore(cipherJwk);
+  return notesStore;
+}
+
+export function useNotes<T>(selector: (state: NotesState) => T): T {
+  if (!notesStore) throw new Error("Store not initialized");
+  return notesStore(selector);
+}
 ```
 
-## 4. Add Authentication
+## 3. Add Authentication
 
-```typescript
-// components/AuthGate.tsx
+```tsx
+// components/Auth.tsx
 import { useState } from "react";
-import { useVaultAuth } from "@zod-vault/client";
-import { vaultClient } from "../lib/vault";
+import { useSignUp, useSignIn, type ZKCredential } from "@zod-vault/client";
+import { vaultClient } from "../lib/vault-client";
 
-export function AuthGate({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading } = useVaultAuth(vaultClient);
-
-  if (isLoading) return <div>Loading...</div>;
-  if (!isAuthenticated) return <LoginForm />;
-  return <>{children}</>;
+interface AuthProps {
+  onAuthenticated: (credential: ZKCredential) => void;
 }
 
-function LoginForm() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const { login } = useVaultAuth(vaultClient);
+export function Auth({ onAuthenticated }: AuthProps) {
+  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const { signUp, isLoading: isSigningUp } = useSignUp(vaultClient);
+  const { signIn, isLoading: isSigningIn } = useSignIn(vaultClient);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    await login(email, password);
+  const handleAuth = async () => {
+    const fn = mode === "signup" ? signUp : signIn;
+    const result = await fn({ usePasskey: true });
+    
+    if (result.success && result.credential) {
+      onAuthenticated(result.credential);
+    }
   };
 
   return (
-    <form onSubmit={handleSubmit}>
-      <input
-        type="email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        placeholder="Email"
-      />
-      <input
-        type="password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        placeholder="Password"
-      />
-      <button type="submit">Login</button>
-    </form>
-  );
-}
-```
-
-## 5. Use the Store
-
-```typescript
-// components/Notes.tsx
-import { useState } from "react";
-import { useNotes } from "../stores/notes";
-
-export function Notes() {
-  const { notes, addNote, removeNote } = useNotes();
-  const [input, setInput] = useState("");
-
-  return (
     <div>
-      <ul>
-        {notes.map((note, i) => (
-          <li key={i}>
-            {note}
-            <button onClick={() => removeNote(i)}>Delete</button>
-          </li>
-        ))}
-      </ul>
-      <input
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-        placeholder="New note"
-      />
-      <button onClick={() => { addNote(input); setInput(""); }}>
-        Add
+      <button onClick={handleAuth} disabled={isSigningUp || isSigningIn}>
+        {mode === "signup" ? "Create Account" : "Sign In"} with Passkey
+      </button>
+      <button onClick={() => setMode(mode === "signin" ? "signup" : "signin")}>
+        {mode === "signin" ? "Need an account?" : "Already have one?"}
       </button>
     </div>
   );
 }
 ```
 
-## 6. Sync Across Devices
+## 4. Wire It Up
 
-The store auto-syncs every 30 seconds. For manual control:
+```tsx
+// App.tsx
+import { useState } from "react";
+import type { ZKCredential } from "@zod-vault/client";
+import { Auth } from "./components/Auth";
+import { Notes } from "./components/Notes";
+import { initNotesStore } from "./stores/notes";
+
+export function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  const handleAuthenticated = (credential: ZKCredential) => {
+    // Initialize the encrypted store with the derived key
+    initNotesStore(credential.cipherJwk);
+    setIsAuthenticated(true);
+  };
+
+  if (!isAuthenticated) {
+    return <Auth onAuthenticated={handleAuthenticated} />;
+  }
+
+  return <Notes />;
+}
+```
+
+## 5. Use the Store
+
+```tsx
+// components/Notes.tsx
+import { useState } from "react";
+import { useNotes } from "../stores/notes";
+
+export function Notes() {
+  const notes = useNotes((s) => s.notes);
+  const addNote = useNotes((s) => s.addNote);
+  const [input, setInput] = useState("");
+
+  return (
+    <div>
+      <ul>
+        {notes.map((note, i) => (
+          <li key={i}>{note}</li>
+        ))}
+      </ul>
+      <input value={input} onChange={(e) => setInput(e.target.value)} />
+      <button onClick={() => { addNote(input); setInput(""); }}>Add</button>
+    </div>
+  );
+}
+```
+
+## Key Concepts
+
+### Passkey = Encryption Key
+
+The `cipherJwk` is derived from your passkey using the WebAuthn PRF extension. This means:
+- **No recovery key to store** — your passkey IS the key
+- **Same passkey = same data** — works across devices with synced passkeys
+- **Zero-knowledge** — server never sees your plaintext data
+
+### Re-authentication on Refresh
+
+After a page refresh, the `cipherJwk` is lost (it lives only in memory for security). The user must re-authenticate with their passkey to derive the key again.
+
+```tsx
+// Detect if we need to re-auth
+const jwt = vaultClient.getToken(); // JWT persists in localStorage
+const hasCipherKey = Boolean(cipherJwk); // But cipherJwk doesn't
+
+if (jwt && !hasCipherKey) {
+  // Valid session but no key = need to re-auth with passkey
+  showAuthScreen();
+}
+```
+
+### Sync Status
 
 ```typescript
-// Full sync (push + pull)
-await useNotes.vault.sync();
+// Check sync status
+const status = useStore.vault.getSyncStatus();
+// "idle" | "syncing" | "synced" | "error" | "offline"
 
-// Or granular
-await useNotes.vault.push();  // Local → Server
-await useNotes.vault.pull();  // Server → Local
-
-// Check status
-useNotes.vault.getSyncStatus();
-// => "idle" | "syncing" | "synced" | "error" | "offline"
+// Manual sync
+await useStore.vault.sync();
 ```
 
 ## Local-Only Mode
 
-Don't need cloud sync? Skip the server:
+Don't need cloud sync? Skip the server config:
 
 ```typescript
-const useNotes = create(
-  vault<NotesState>(
-    (set) => ({ ... }),
-    {
-      name: "notes",
-      recoveryKey: "your-recovery-key",
-      // No server = encrypted localStorage only
-    }
-  )
-);
+const options: VaultOptionsJwk<NotesState> = {
+  name: "my-notes",
+  cipherJwk,
+  // No server = encrypted localStorage only
+};
 ```
 
 ## Next Steps
 
-- [Authentication](/guides/authentication/) - Passkeys, email auth, React hooks
-- [Syncing Data](/guides/syncing/) - Conflict resolution, offline queue
-- [Self-Hosting](/guides/self-hosting/) - Deploy your own server
+- [Authentication](/guides/authentication/) — Passkey flows, hooks, error handling
+- [Syncing](/guides/syncing/) — Conflict resolution, offline support
+- [Self-Hosting](/guides/self-hosting/) — Deploy your own server

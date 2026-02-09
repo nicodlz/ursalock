@@ -3,7 +3,15 @@ title: Syncing Data
 description: How sync works, offline support, and conflict resolution
 ---
 
-zod-vault handles bidirectional sync between your local store and the server.
+zod-vault syncs your encrypted data between local storage and the server.
+
+## How Sync Works
+
+1. **Local changes** → encrypted → pushed to server
+2. **Server changes** → pulled → decrypted → merged with local
+3. **Conflict resolution** → Last-Write-Wins (LWW) by timestamp
+
+All data is encrypted client-side before leaving your device.
 
 ## Sync Methods
 
@@ -13,10 +21,7 @@ zod-vault handles bidirectional sync between your local store and the server.
 await useStore.vault.sync();
 ```
 
-This:
-1. Pushes local changes to server
-2. Pulls remote changes from server
-3. Merges with local state (LWW)
+Pushes local changes, pulls remote changes, merges using LWW.
 
 ### Push Only
 
@@ -24,7 +29,7 @@ This:
 await useStore.vault.push();
 ```
 
-Send local changes to server without pulling.
+Send local state to server without pulling.
 
 ### Pull Only
 
@@ -33,29 +38,29 @@ const hasChanges = await useStore.vault.pull();
 // Returns true if server had newer data
 ```
 
-Get latest from server without pushing local changes.
+Get latest from server without pushing.
 
 ## Auto-Sync
 
 By default, vault syncs every 30 seconds:
 
 ```typescript
-vault(storeConfig, {
+vault(storeCreator, {
   name: "my-store",
-  recoveryKey: "...",
-  server: "https://...",
-  getToken: () => client.getToken(),
+  cipherJwk,
+  server: "https://vault.example.com",
+  getToken: () => token,
   syncInterval: 30000,  // 30 seconds (default)
-})
+});
 ```
 
 Disable auto-sync:
 
 ```typescript
-vault(storeConfig, {
+vault(storeCreator, {
   // ...
   syncInterval: 0,  // Manual sync only
-})
+});
 ```
 
 ## Sync Status
@@ -65,116 +70,177 @@ const status = useStore.vault.getSyncStatus();
 // "idle" | "syncing" | "synced" | "error" | "offline"
 ```
 
-React hook:
+### Status Hook
 
-```typescript
-import { useVaultSync } from "@zod-vault/client";
+```tsx
+import { useSyncStatus } from "@zod-vault/zustand";
 
-function SyncIndicator() {
-  const { status, hasPending, sync } = useVaultSync(useStore);
-
+function SyncIndicator({ store }) {
+  const status = useSyncStatus(store);
+  
   return (
-    <div>
-      <span>Status: {status}</span>
-      {hasPending && <span>Pending changes</span>}
-      <button onClick={sync}>Sync Now</button>
-    </div>
+    <span>
+      {status === "syncing" && "⏳ Syncing..."}
+      {status === "synced" && "✅ Synced"}
+      {status === "error" && "❌ Sync failed"}
+      {status === "offline" && "📴 Offline"}
+      {status === "idle" && "⏸️ Idle"}
+    </span>
   );
 }
 ```
 
-## Offline Support
+### Custom Sync Status Component
 
-When offline, changes queue locally:
-
-```typescript
-// Check for pending changes
-const pending = useStore.vault.hasPendingChanges();
-// => true if offline queue has items
+```tsx
+function SyncStatus() {
+  const [status, setStatus] = useState("idle");
+  
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setStatus(useStore.vault.getSyncStatus());
+    }, 5000); // Poll every 5s
+    
+    return () => clearInterval(interval);
+  }, []);
+  
+  const handleManualSync = async () => {
+    await useStore.vault.sync();
+  };
+  
+  return (
+    <button onClick={handleManualSync}>
+      {status === "syncing" ? "Syncing..." : "Sync Now"}
+    </button>
+  );
+}
 ```
-
-When back online, call `sync()` to flush the queue.
-
-### Offline Queue Behavior
-
-1. Changes made offline are stored locally
-2. Data remains encrypted in localStorage
-3. On next `sync()`, pending changes are pushed
-4. Server applies changes with conflict resolution
 
 ## Conflict Resolution
 
 zod-vault uses **Last-Write-Wins (LWW)**:
 
-- Each change has a timestamp
-- Server compares timestamps
-- Newer timestamp wins
-
-Example:
-
 ```
-Device A: { count: 5 } at 10:00:00
-Device B: { count: 8 } at 10:00:05
+Device A: saves { count: 5 } at 10:00:00
+Device B: saves { count: 8 } at 10:00:05
 
-Server keeps: { count: 8 } (newer)
+After sync: { count: 8 } wins (newer timestamp)
 ```
 
-### Handling Conflicts in Your App
+### Partialize for Granular Sync
 
-For more control, use `partialize` to sync only specific fields:
+Control which fields are synced:
 
 ```typescript
-vault(storeConfig, {
+vault(storeCreator, {
   name: "my-store",
-  recoveryKey: "...",
+  cipherJwk,
+  server: "https://...",
+  getToken: () => token,
   partialize: (state) => ({
-    // Only sync these fields
+    // Sync these fields
     notes: state.notes,
     settings: state.settings,
-    // Don't sync temporary UI state
+    // Don't sync UI state
+    // currentNoteId: state.currentNoteId, // excluded
   }),
-})
+});
+```
+
+## Offline Support
+
+When offline:
+1. Changes save to encrypted localStorage
+2. `getSyncStatus()` returns `"offline"`
+3. When back online, call `sync()` to push pending changes
+
+```typescript
+// Check for pending changes
+const pending = useStore.vault.hasPendingChanges();
+
+// Sync when back online
+window.addEventListener("online", () => {
+  useStore.vault.sync();
+});
 ```
 
 ## Sync on App Lifecycle
 
-Recommended pattern:
+Recommended pattern for robust sync:
 
-```typescript
-// On app start
+```tsx
 useEffect(() => {
+  // Sync on app start
   useStore.vault.sync();
-}, []);
-
-// On visibility change (tab focus)
-useEffect(() => {
+  
+  // Sync when tab becomes visible
   const handleVisibility = () => {
     if (document.visibilityState === "visible") {
       useStore.vault.sync();
     }
   };
   document.addEventListener("visibilitychange", handleVisibility);
-  return () => document.removeEventListener("visibilitychange", handleVisibility);
-}, []);
-
-// Before close (flush pending)
-useEffect(() => {
-  const handleBeforeUnload = () => {
+  
+  // Sync before close
+  const handleUnload = () => {
     if (useStore.vault.hasPendingChanges()) {
       useStore.vault.push();
     }
   };
-  window.addEventListener("beforeunload", handleBeforeUnload);
-  return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  window.addEventListener("beforeunload", handleUnload);
+  
+  return () => {
+    document.removeEventListener("visibilitychange", handleVisibility);
+    window.removeEventListener("beforeunload", handleUnload);
+  };
 }, []);
 ```
+
+## Debounced Sync
+
+For frequently changing data (like a text editor), debounce syncs:
+
+```typescript
+import { useMemo } from "react";
+import { debounce } from "lodash-es";
+
+function Editor() {
+  const updateNote = useStore((s) => s.updateNote);
+  
+  // Debounce sync after edits
+  const debouncedSync = useMemo(
+    () => debounce(() => useStore.vault.sync(), 3000),
+    []
+  );
+  
+  const handleChange = (content: string) => {
+    updateNote(noteId, { content });
+    debouncedSync();
+  };
+  
+  return <textarea onChange={(e) => handleChange(e.target.value)} />;
+}
+```
+
+## Server Configuration
+
+The server stores encrypted blobs per user:
+
+```
+POST /api/vault/:name/push
+  Body: { encrypted: "...", updatedAt: 1234567890 }
+  
+GET /api/vault/:name/pull
+  Response: { encrypted: "...", updatedAt: 1234567890 }
+```
+
+See [Self-Hosting](/guides/self-hosting/) for server setup.
 
 ## Debugging
 
 Enable debug logging:
 
 ```typescript
-// In browser console
 localStorage.setItem("zod-vault:debug", "true");
 ```
 
@@ -186,4 +252,29 @@ console.log({
   pending: useStore.vault.hasPendingChanges(),
   hydrated: useStore.vault.hasHydrated(),
 });
+```
+
+## Common Issues
+
+### "vault_already_exists" Error
+
+This happens when creating a new vault but one already exists on the server. The client should pull first:
+
+```typescript
+// On initial load, try pull before push
+await useStore.vault.pull();
+```
+
+### Sync Not Working Across Devices
+
+1. Check passkey provider syncs credentials (iCloud, Google, Proton Pass)
+2. Verify same `opaqueId` on both devices (derived from passkey rawId)
+3. Check server URL is the same
+4. Verify JWT is valid
+
+### Data Appears Stale
+
+```typescript
+// Force a fresh pull from server
+await useStore.vault.pull();
 ```
