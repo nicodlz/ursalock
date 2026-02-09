@@ -2,27 +2,33 @@
 
 ## Current Position
 - Milestone: v0.1.0
-- Phase: 2
-- Task: Starting Zustand middleware
-- Status: Phase 1 complete, Phase 2 starting
+- Phase: 3
+- Task: Starting authentication
+- Status: Phase 2 complete, Phase 3 starting
 
 ## Active Context
-Building the vault() middleware to replace persist() with encrypted storage.
-
-## Recent Decisions
-- 2026-02-09: Chose Argon2id over PBKDF2 (OWASP 2026 recommendation)
-- 2026-02-09: Chose hash-wasm for Argon2id (~15KB, WASM)
-- 2026-02-09: AES-256-GCM via native Web Crypto API
-- 2026-02-09: SQLite over PostgreSQL
-- 2026-02-09: Passkeys default, email/password fallback
-- 2026-02-09: 1 user = 1 vault for v1
-- 2026-02-09: LWW conflict resolution for v1
+Building passkeys (WebAuthn) auth with email/password fallback.
 
 ## Completed Phases
-- [x] Phase 1: Core Crypto (22 tests passing)
+- [x] Phase 1: Core Crypto (22 tests) ✅
+- [x] Phase 2: Zustand Middleware (10 tests) ✅
+
+## Recent Decisions
+- 2026-02-09: Argon2id with 64MiB memory (OWASP 2026)
+- 2026-02-09: AES-256-GCM via native Web Crypto
+- 2026-02-09: SQLite backend
+- 2026-02-09: Passkeys default + email fallback
+- 2026-02-09: skipHydration still allows persistence
+
+## Commits
+| Hash | Description |
+|------|-------------|
+| 19c9c27 | Initialize project + crypto package |
+| 0c9f8ba | Fix large payload test |
+| 1a54a00 | Zustand vault() middleware |
 
 ## Blockers
 - None
 
 ## Last Updated
-2026-02-09T15:17:00Z
+2026-02-09T15:22:00Z
