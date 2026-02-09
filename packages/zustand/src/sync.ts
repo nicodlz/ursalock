@@ -140,7 +140,7 @@ export function createSyncEngine(options: SyncOptions) {
   };
 
   /**
-   * Push vault to server
+   * Push vault to server (handles race conditions with retry on 409)
    */
   const pushServer = async (data: string, salt: string): Promise<ServerVault> => {
     const token = getToken();
@@ -149,27 +149,54 @@ export function createSyncEngine(options: SyncOptions) {
     // Try to get existing vault first
     const existing = await fetchServer();
     
-    const method = existing ? "PUT" : "POST";
-    const url = existing 
-      ? `${serverUrl}/vault/${existing.uid}`
-      : `${serverUrl}/vault`;
-    
-    const body = existing
-      ? { data, salt }
-      : { name, data, salt };
+    if (existing) {
+      // Update existing vault
+      const res = await fetch(`${serverUrl}/vault/${existing.uid}`, {
+        method: "PUT",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ data, salt }),
+      });
 
-    const res = await fetch(url, {
-      method,
+      if (!res.ok) throw new Error(`Server error: ${res.status}`);
+      return res.json();
+    }
+
+    // Try to create new vault
+    const createRes = await fetch(`${serverUrl}/vault`, {
+      method: "POST",
       headers: {
         "Authorization": `Bearer ${token}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ name, data, salt }),
     });
 
-    if (!res.ok) throw new Error(`Server error: ${res.status}`);
+    // Handle race condition: vault was created between our check and POST
+    if (createRes.status === 409) {
+      // Fetch the existing vault and update it instead
+      const nowExisting = await fetchServer();
+      if (!nowExisting) {
+        throw new Error("Vault conflict but not found on retry");
+      }
+      
+      const retryRes = await fetch(`${serverUrl}/vault/${nowExisting.uid}`, {
+        method: "PUT",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ data, salt }),
+      });
 
-    return res.json();
+      if (!retryRes.ok) throw new Error(`Server error: ${retryRes.status}`);
+      return retryRes.json();
+    }
+
+    if (!createRes.ok) throw new Error(`Server error: ${createRes.status}`);
+    return createRes.json();
   };
 
   /**
