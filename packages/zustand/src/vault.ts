@@ -147,7 +147,8 @@ const vaultImpl: VaultImpl = (initializer, options) => (set, get, api) => {
       if (stored) {
         const parsed = JSON.parse(stored)
         const merged = merge(parsed, get())
-        set(merged as T, true)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        set(merged as any, true)
       }
       
       hasHydrated = true
@@ -185,8 +186,8 @@ const vaultImpl: VaultImpl = (initializer, options) => (set, get, api) => {
     await storage.removeItem(name)
   }
 
-  // Extend API
-  const vaultApi: VaultApi<unknown> = {
+  // Extend API with vault methods
+  const vaultApi = {
     sync,
     rehydrate,
     hasHydrated: () => hasHydrated,
@@ -198,7 +199,7 @@ const vaultImpl: VaultImpl = (initializer, options) => (set, get, api) => {
   Object.assign(api, vaultApi)
 
   // Subscribe to changes and persist
-  const unsubscribe = api.subscribe(async () => {
+  api.subscribe(async () => {
     if (hasHydrated) {
       await persist()
     }
@@ -218,7 +219,8 @@ const vaultImpl: VaultImpl = (initializer, options) => (set, get, api) => {
   }
 
   // Create the store
-  return initializer(set, get, api)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return initializer(set, get, api as any)
 }
 
 export const vault = vaultImpl as Vault
