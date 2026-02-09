@@ -177,19 +177,22 @@ describe('vault middleware', () => {
       )
     )
 
-    const api = store as unknown as {
-      sync: () => Promise<void>
-      rehydrate: () => Promise<void>
-      hasHydrated: () => boolean
-      getSyncStatus: () => string
-      clearStorage: () => Promise<void>
+    // Vault API is exposed under store.vault (like zustand persist uses store.persist)
+    const storeWithVault = store as typeof store & {
+      vault: {
+        sync: () => Promise<void>
+        rehydrate: () => Promise<void>
+        hasHydrated: () => boolean
+        getSyncStatus: () => string
+        clearStorage: () => Promise<void>
+      }
     }
 
-    expect(typeof api.sync).toBe('function')
-    expect(typeof api.rehydrate).toBe('function')
-    expect(typeof api.hasHydrated).toBe('function')
-    expect(typeof api.getSyncStatus).toBe('function')
-    expect(typeof api.clearStorage).toBe('function')
+    expect(typeof storeWithVault.vault.sync).toBe('function')
+    expect(typeof storeWithVault.vault.rehydrate).toBe('function')
+    expect(typeof storeWithVault.vault.hasHydrated).toBe('function')
+    expect(typeof storeWithVault.vault.getSyncStatus).toBe('function')
+    expect(typeof storeWithVault.vault.clearStorage).toBe('function')
   })
 
   it('persists state changes to encrypted storage', async () => {

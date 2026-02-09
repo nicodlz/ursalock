@@ -19,16 +19,17 @@ Building passkeys (WebAuthn) auth with email/password fallback.
 - 2026-02-09: SQLite backend
 - 2026-02-09: Passkeys default + email fallback
 - 2026-02-09: skipHydration still allows persistence
+- 2026-02-09: Manual types for zustand (complex mutator types need refinement)
 
 ## Commits
 | Hash | Description |
 |------|-------------|
 | 19c9c27 | Initialize project + crypto package |
-| 0c9f8ba | Fix large payload test |
-| 1a54a00 | Zustand vault() middleware |
+| 4d4d1c5 | Zustand vault() middleware + storage |
+| 07acc5b | Phase 2 complete - tests passing |
 
 ## Blockers
 - None
 
 ## Last Updated
-2026-02-09T15:22:00Z
+2026-02-09T15:31:00Z

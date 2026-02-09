@@ -1,13 +1,18 @@
 /**
  * vault() middleware - Drop-in replacement for persist()
  * Adds E2EE encryption and cloud sync to Zustand stores
+ * 
+ * Type pattern follows zustand's persist middleware:
+ * - Simple internal implementation type (VaultImpl)
+ * - Complex public API type (Vault)
+ * - Cast at export: `vaultImpl as unknown as Vault`
  */
 
-import type { StateCreator, StoreMutatorIdentifier } from 'zustand'
+import type { StateCreator, StoreApi, StoreMutatorIdentifier } from 'zustand'
 import { createVaultStorage, type VaultStorage } from './storage.js'
 
 /** Vault middleware options */
-export interface VaultOptions<T> {
+export interface VaultOptions<S, PersistedState = S> {
   /** Unique name for this vault (used as storage key) */
   name: string
   
@@ -30,18 +35,18 @@ export interface VaultOptions<T> {
    * Partial state to persist
    * @default (state) => state (persist everything)
    */
-  partialize?: (state: T) => Partial<T>
+  partialize?: (state: S) => PersistedState
   
   /**
    * Merge function for rehydration
    * @default Object.assign
    */
-  merge?: (persistedState: Partial<T>, currentState: T) => T
+  merge?: (persistedState: unknown, currentState: S) => S
   
   /**
    * Called when state is loaded from storage
    */
-  onRehydrateStorage?: (state: T | undefined) => ((state?: T, error?: Error) => void) | void
+  onRehydrateStorage?: (state: S) => ((state?: S, error?: unknown) => void) | void
   
   /**
    * Skip hydration on init (useful for SSR)
@@ -56,43 +61,210 @@ export interface VaultOptions<T> {
   syncInterval?: number
 }
 
-/** API exposed by vault middleware */
-export interface VaultApi<T> {
-  /** Manually trigger sync with server */
-  sync: () => Promise<void>
-  /** Manually trigger rehydration from storage */
-  rehydrate: () => Promise<void>
-  /** Check if store has been hydrated */
-  hasHydrated: () => boolean
-  /** Get current sync status */
-  getSyncStatus: () => SyncStatus
-  /** Clear all stored data */
-  clearStorage: () => Promise<void>
-}
-
 export type SyncStatus = 'idle' | 'syncing' | 'synced' | 'error'
 
-type VaultImpl = <
+type VaultListener<S> = (state: S) => void
+
+/** Store shape extended with vault API */
+type StoreVault<S, Ps> = S extends {
+  getState: () => infer T
+  setState: {
+    (...args: infer Sa1): infer Sr1
+    (...args: infer Sa2): infer Sr2
+  }
+} ? {
+  setState(...args: Sa1): Sr1 | Promise<void>
+  setState(...args: Sa2): Sr2 | Promise<void>
+  vault: {
+    sync: () => Promise<void>
+    rehydrate: () => Promise<void>
+    hasHydrated: () => boolean
+    getSyncStatus: () => SyncStatus
+    clearStorage: () => Promise<void>
+    onHydrate: (fn: VaultListener<T>) => () => void
+    onFinishHydration: (fn: VaultListener<T>) => () => void
+  }
+} : never
+
+type Write<T, U> = Omit<T, keyof U> & U
+type WithVault<S, A> = Write<S, StoreVault<S, A>>
+
+/** Public API type with complex mutator support */
+type Vault = <
   T,
   Mps extends [StoreMutatorIdentifier, unknown][] = [],
   Mcs extends [StoreMutatorIdentifier, unknown][] = [],
+  U = T,
 >(
   initializer: StateCreator<T, [...Mps, ['vault', unknown]], Mcs>,
-  options: VaultOptions<T>,
-) => StateCreator<T, Mps, [['vault', unknown], ...Mcs]>
-
-type Vault = VaultImpl & {
-  /** @deprecated use vault() directly */
-  persist: VaultImpl
-}
+  options: VaultOptions<T, U>,
+) => StateCreator<T, Mps, [['vault', U], ...Mcs]>
 
 declare module 'zustand' {
   interface StoreMutators<S, A> {
-    vault: Write<S, VaultApi<S>>
+    vault: WithVault<S, A>
   }
 }
 
-type Write<T, U> = Omit<T, keyof U> & U
+/** Simplified internal implementation type */
+type VaultImpl = <T>(
+  storeInitializer: StateCreator<T, [], []>,
+  options: VaultOptions<T, T>,
+) => StateCreator<T, [], []>
+
+/**
+ * Internal vault implementation
+ * Uses simplified types - complex types applied at export
+ */
+const vaultImpl: VaultImpl = (config, baseOptions) => (set, get, api) => {
+  type S = ReturnType<typeof config>
+  
+  const options = {
+    partialize: (state: S) => state,
+    merge: (persistedState: unknown, currentState: S) => ({
+      ...currentState,
+      ...(persistedState as object),
+    }),
+    syncInterval: 30000,
+    ...baseOptions,
+  }
+
+  const {
+    name,
+    recoveryKey,
+    server,
+    partialize,
+    merge,
+    onRehydrateStorage,
+    skipHydration = false,
+    syncInterval,
+  } = options
+
+  // Create encrypted storage
+  const storage = options.storage ?? createVaultStorage({
+    recoveryKey,
+    prefix: options.prefix,
+  })
+
+  // State
+  let hasHydrated = false
+  let syncStatus: SyncStatus = 'idle'
+  const hydrationListeners = new Set<VaultListener<S>>()
+  const finishHydrationListeners = new Set<VaultListener<S>>()
+
+  // Persist to storage
+  const persistState = async (): Promise<void> => {
+    const state = partialize({ ...get() })
+    await storage.setItem(name, JSON.stringify(state))
+  }
+
+  // Hydrate from storage
+  const rehydrate = async (): Promise<void> => {
+    hasHydrated = false
+    hydrationListeners.forEach((cb) => cb(get()))
+    
+    const postRehydrationCallback = onRehydrateStorage?.(get()) || undefined
+    
+    try {
+      const stored = await storage.getItem(name)
+      
+      if (stored) {
+        const parsed = JSON.parse(stored) as unknown
+        const merged = merge(parsed, get())
+        set(merged, true)
+      }
+      
+      hasHydrated = true
+      postRehydrationCallback?.(get(), undefined)
+      finishHydrationListeners.forEach((cb) => cb(get()))
+    } catch (error) {
+      postRehydrationCallback?.(undefined, error as Error)
+    }
+  }
+
+  // Sync with server (if configured)
+  const sync = async (): Promise<void> => {
+    if (!server) return
+    
+    syncStatus = 'syncing'
+    
+    try {
+      // TODO: Implement server sync in Phase 5
+      await persistState()
+      syncStatus = 'synced'
+    } catch (error) {
+      console.error('[zod-vault] Sync failed:', error)
+      syncStatus = 'error'
+    }
+  }
+
+  // Clear storage
+  const clearStorage = async (): Promise<void> => {
+    await storage.removeItem(name)
+  }
+
+  // Override setState to persist on changes
+  // Using type assertion for the overloaded setState signature
+  // This is the same pattern zustand persist uses internally
+  type SetState = typeof api.setState
+  const savedSetState: SetState = api.setState
+  
+  api.setState = ((state: S | Partial<S> | ((s: S) => S | Partial<S>), replace?: boolean) => {
+    if (replace) {
+      savedSetState(state as S, true)
+    } else {
+      savedSetState(state)
+    }
+    void persistState()
+  }) as SetState
+
+  // Create store with wrapped set
+  const configResult = config(
+    ((partial: S | Partial<S> | ((s: S) => S | Partial<S>), replace?: boolean) => {
+      if (replace) {
+        set(partial as S, true)
+      } else {
+        set(partial)
+      }
+      void persistState()
+    }) as typeof set,
+    get,
+    api,
+  )
+
+  // Extend API with vault methods
+  const storeWithVault = api as StoreApi<S> & { vault: unknown }
+  storeWithVault.vault = {
+    sync,
+    rehydrate,
+    hasHydrated: () => hasHydrated,
+    getSyncStatus: () => syncStatus,
+    clearStorage,
+    onHydrate: (cb: VaultListener<S>) => {
+      hydrationListeners.add(cb)
+      return () => hydrationListeners.delete(cb)
+    },
+    onFinishHydration: (cb: VaultListener<S>) => {
+      finishHydrationListeners.add(cb)
+      return () => finishHydrationListeners.delete(cb)
+    },
+  }
+
+  // Auto-hydrate on init (unless skipHydration)
+  if (!skipHydration) {
+    void rehydrate()
+  } else {
+    // Even with skipHydration, mark as hydrated to allow persistence
+    hasHydrated = true
+  }
+
+  // Setup sync interval (if server configured)
+  if (server && syncInterval > 0) {
+    setInterval(() => void sync(), syncInterval)
+  }
+
+  return configResult
+}
 
 /**
  * vault() middleware - Add E2EE encrypted persistence to Zustand
@@ -114,114 +286,4 @@ type Write<T, U> = Omit<T, keyof U> & U
  * )
  * ```
  */
-const vaultImpl: VaultImpl = (initializer, options) => (set, get, api) => {
-  const {
-    name,
-    recoveryKey,
-    server,
-    partialize = (state) => state,
-    merge = (persisted, current) => ({ ...current, ...persisted }),
-    onRehydrateStorage,
-    skipHydration = false,
-    syncInterval = 30000,
-  } = options
-
-  // Create encrypted storage
-  const storage = options.storage ?? createVaultStorage({
-    recoveryKey,
-    prefix: options.prefix,
-  })
-
-  // State
-  let hasHydrated = false
-  let syncStatus: SyncStatus = 'idle'
-  let syncTimer: ReturnType<typeof setInterval> | null = null
-
-  // Hydrate from storage
-  const rehydrate = async (): Promise<void> => {
-    const postRehydrationCallback = onRehydrateStorage?.(get())
-    
-    try {
-      const stored = await storage.getItem(name)
-      
-      if (stored) {
-        const parsed = JSON.parse(stored)
-        const merged = merge(parsed, get())
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        set(merged as any, true)
-      }
-      
-      hasHydrated = true
-      postRehydrationCallback?.(get(), undefined)
-    } catch (error) {
-      postRehydrationCallback?.(undefined, error as Error)
-    }
-  }
-
-  // Persist to storage
-  const persist = async (): Promise<void> => {
-    const state = partialize(get())
-    await storage.setItem(name, JSON.stringify(state))
-  }
-
-  // Sync with server (if configured)
-  const sync = async (): Promise<void> => {
-    if (!server) return
-    
-    syncStatus = 'syncing'
-    
-    try {
-      // TODO: Implement server sync in Phase 5
-      // For now, just persist locally
-      await persist()
-      syncStatus = 'synced'
-    } catch (error) {
-      console.error('[zod-vault] Sync failed:', error)
-      syncStatus = 'error'
-    }
-  }
-
-  // Clear storage
-  const clearStorage = async (): Promise<void> => {
-    await storage.removeItem(name)
-  }
-
-  // Extend API with vault methods
-  const vaultApi = {
-    sync,
-    rehydrate,
-    hasHydrated: () => hasHydrated,
-    getSyncStatus: () => syncStatus,
-    clearStorage,
-  }
-
-  // Merge into store API
-  Object.assign(api, vaultApi)
-
-  // Subscribe to changes and persist
-  api.subscribe(async () => {
-    if (hasHydrated) {
-      await persist()
-    }
-  })
-
-  // Auto-hydrate on init (unless skipHydration)
-  if (!skipHydration) {
-    rehydrate()
-  } else {
-    // Even with skipHydration, allow persistence to work
-    hasHydrated = true
-  }
-
-  // Setup sync interval (if server configured)
-  if (server && syncInterval > 0) {
-    syncTimer = setInterval(sync, syncInterval)
-  }
-
-  // Create the store
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return initializer(set, get, api as any)
-}
-
-export const vault = vaultImpl as Vault
-vault.persist = vaultImpl
+export const vault = vaultImpl as unknown as Vault

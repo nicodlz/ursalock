@@ -2,7 +2,7 @@
  * React hooks for vault status
  */
 
-export type SyncStatus = 'idle' | 'syncing' | 'synced' | 'error'
+import type { SyncStatus } from './vault.js'
 
 /**
  * Hook to get sync status from a vault store
@@ -13,11 +13,11 @@ export type SyncStatus = 'idle' | 'syncing' | 'synced' | 'error'
  * // 'idle' | 'syncing' | 'synced' | 'error'
  * ```
  */
-export function useSyncStatus<T extends { getSyncStatus?: () => SyncStatus }>(
+export function useSyncStatus<T extends { vault?: { getSyncStatus?: () => SyncStatus } }>(
   useStore: () => T
 ): SyncStatus {
   const store = useStore()
-  return store.getSyncStatus?.() ?? 'idle'
+  return store.vault?.getSyncStatus?.() ?? 'idle'
 }
 
 /**
@@ -29,9 +29,9 @@ export function useSyncStatus<T extends { getSyncStatus?: () => SyncStatus }>(
  * if (!hydrated) return <Loading />
  * ```
  */
-export function useHydrated<T extends { hasHydrated?: () => boolean }>(
+export function useHydrated<T extends { vault?: { hasHydrated?: () => boolean } }>(
   useStore: () => T
 ): boolean {
   const store = useStore()
-  return store.hasHydrated?.() ?? false
+  return store.vault?.hasHydrated?.() ?? false
 }
