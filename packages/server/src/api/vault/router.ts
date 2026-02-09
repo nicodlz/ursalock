@@ -59,6 +59,22 @@ export const vaultRouter = new Hono<{
     },
   )
 
+  // Get vault by name (for sync engine)
+  .get(
+    "/by-name/:name",
+    (c) => {
+      const session = c.get("session");
+      const { name } = c.req.param();
+
+      const vault = getVaultByName(name, session.user.id);
+      if (!vault) {
+        throw new ApiException(errors.vault_not_found, 404);
+      }
+
+      return c.json(toVaultResponse(vault) satisfies VaultResponse);
+    },
+  )
+
   // Get vault by UID
   .get(
     "/:uid",

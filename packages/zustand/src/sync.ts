@@ -126,7 +126,7 @@ export function createSyncEngine(options: SyncOptions) {
     const token = getToken();
     if (!token) return null;
 
-    const res = await fetch(`${serverUrl}/vault/${name}`, {
+    const res = await fetch(`${serverUrl}/vault/by-name/${encodeURIComponent(name)}`, {
       headers: {
         "Authorization": `Bearer ${token}`,
         "Content-Type": "application/json",
