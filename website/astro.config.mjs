@@ -16,7 +16,6 @@ export default defineConfig({
       },
       social: [
         { icon: "github", label: "GitHub", href: "https://github.com/nicodlz/zod-vault" },
-        { icon: "x.com", label: "Twitter", href: "https://twitter.com/nicolasdeluz" },
       ],
       head: [
         {
