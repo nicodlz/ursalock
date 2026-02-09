@@ -1,7 +1,7 @@
 {
   "name": "@zod-vault/server",
-  "version": "0.1.1",
-  "description": "Self-hostable zod-vault server with SQLite",
+  "version": "0.2.0",
+  "description": "Self-hostable zod-vault server with SQLite and ZKCredentials support",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -48,7 +48,9 @@
     "server",
     "e2ee",
     "sqlite",
-    "hono"
+    "hono",
+    "zkc",
+    "passkey"
   ],
   "license": "MIT",
   "author": "Nicolas de Luz <ndlz@pm.me>",

@@ -19,8 +19,32 @@ export function getDb(): Database.Database {
     _db.pragma("journal_mode = WAL");
     _db.pragma("foreign_keys = ON");
     _db.exec(CREATE_TABLES_SQL);
+    
+    // Run migrations for new columns
+    runMigrations(_db);
   }
   return _db;
+}
+
+/**
+ * Run schema migrations
+ */
+function runMigrations(db: Database.Database): void {
+  // Check if opaque_id column exists
+  const columns = db.pragma("table_info(users)") as Array<{ name: string }>;
+  const hasOpaqueId = columns.some((col) => col.name === "opaque_id");
+  
+  if (!hasOpaqueId) {
+    try {
+      db.exec(`
+        ALTER TABLE users ADD COLUMN opaque_id TEXT UNIQUE;
+        ALTER TABLE users ADD COLUMN display_name TEXT;
+      `);
+      db.exec("CREATE INDEX IF NOT EXISTS idx_users_opaque_id ON users(opaque_id);");
+    } catch {
+      // Columns might already exist from a partial migration
+    }
+  }
 }
 
 /**
@@ -40,22 +64,35 @@ export function closeDb(): void {
 export interface CreateUserInput {
   email?: string;
   passwordHash?: string;
+  /** Opaque ID from ZKCredentials */
+  opaqueId?: string;
+  /** Display name for ZKC users */
+  displayName?: string;
 }
 
 export function createUser(input: CreateUserInput): User {
   const db = getDb();
   const stmt = db.prepare(`
-    INSERT INTO users (email, password_hash)
-    VALUES (?, ?)
-    RETURNING id, uid, email, password_hash as passwordHash, created_at as createdAt, updated_at as updatedAt
+    INSERT INTO users (email, password_hash, opaque_id, display_name)
+    VALUES (?, ?, ?, ?)
+    RETURNING id, uid, email, password_hash as passwordHash, 
+              opaque_id as opaqueId, display_name as displayName,
+              created_at as createdAt, updated_at as updatedAt
   `);
-  return stmt.get(input.email ?? null, input.passwordHash ?? null) as User;
+  return stmt.get(
+    input.email ?? null,
+    input.passwordHash ?? null,
+    input.opaqueId ?? null,
+    input.displayName ?? null
+  ) as User;
 }
 
 export function getUserById(id: number): User | undefined {
   const db = getDb();
   const stmt = db.prepare(`
-    SELECT id, uid, email, password_hash as passwordHash, created_at as createdAt, updated_at as updatedAt
+    SELECT id, uid, email, password_hash as passwordHash,
+           opaque_id as opaqueId, display_name as displayName,
+           created_at as createdAt, updated_at as updatedAt
     FROM users WHERE id = ?
   `);
   return stmt.get(id) as User | undefined;
@@ -64,7 +101,9 @@ export function getUserById(id: number): User | undefined {
 export function getUserByUid(uid: string): User | undefined {
   const db = getDb();
   const stmt = db.prepare(`
-    SELECT id, uid, email, password_hash as passwordHash, created_at as createdAt, updated_at as updatedAt
+    SELECT id, uid, email, password_hash as passwordHash,
+           opaque_id as opaqueId, display_name as displayName,
+           created_at as createdAt, updated_at as updatedAt
     FROM users WHERE uid = ?
   `);
   return stmt.get(uid) as User | undefined;
@@ -73,14 +112,30 @@ export function getUserByUid(uid: string): User | undefined {
 export function getUserByEmail(email: string): User | undefined {
   const db = getDb();
   const stmt = db.prepare(`
-    SELECT id, uid, email, password_hash as passwordHash, created_at as createdAt, updated_at as updatedAt
+    SELECT id, uid, email, password_hash as passwordHash,
+           opaque_id as opaqueId, display_name as displayName,
+           created_at as createdAt, updated_at as updatedAt
     FROM users WHERE email = ?
   `);
   return stmt.get(email) as User | undefined;
 }
 
+/**
+ * Get user by ZKCredentials opaque ID
+ */
+export function getUserByOpaqueId(opaqueId: string): User | undefined {
+  const db = getDb();
+  const stmt = db.prepare(`
+    SELECT id, uid, email, password_hash as passwordHash,
+           opaque_id as opaqueId, display_name as displayName,
+           created_at as createdAt, updated_at as updatedAt
+    FROM users WHERE opaque_id = ?
+  `);
+  return stmt.get(opaqueId) as User | undefined;
+}
+
 // ===================
-// Passkey queries
+// Passkey queries (legacy - kept for backward compatibility)
 // ===================
 
 export interface CreatePasskeyInput {
@@ -142,6 +197,8 @@ export function getPasskeyByCredentialId(credentialId: string): (Passkey & { use
       uid: row["user.uid"] as string,
       email: row["user.email"] as string | null,
       passwordHash: null,
+      opaqueId: null,
+      displayName: null,
       createdAt: 0,
       updatedAt: 0,
     },
@@ -208,6 +265,8 @@ export function getSessionByTokenHash(tokenHash: string): (Session & { user: Use
       uid: row["user.uid"] as string,
       email: row["user.email"] as string | null,
       passwordHash: null,
+      opaqueId: null,
+      displayName: null,
       createdAt: 0,
       updatedAt: 0,
     },

@@ -30,7 +30,8 @@ import {
 import { createToken, hashToken } from "#features/auth/jwt.js";
 import { errors, ApiException, type ApiError } from "#errors.js";
 import { env } from "#env.js";
-import { generateRecoveryKey } from "#features/crypto/recovery.js";
+// NOTE: Recovery key generation removed - now using ZKCredentials PRF
+// Legacy passkey routes kept for backward compatibility
 import { getRpConfigFromRequest } from "#features/auth/origin.js";
 
 // In-memory challenge store (should use Redis in production)
@@ -179,9 +180,6 @@ export const passkeyRouter = new Hono()
           transports: response.response.transports as AuthenticatorTransportFuture[] | undefined,
         });
 
-        // Generate recovery key for E2EE
-        const recoveryKey = generateRecoveryKey();
-
         // Create session
         const token = await createToken({ userId: user.uid, email: userEmail ?? undefined });
         const tokenHash = hashToken(token);
@@ -191,6 +189,7 @@ export const passkeyRouter = new Hono()
         // Clean up challenge
         challengeStore.delete(challenge);
 
+        // NOTE: Recovery key no longer returned - use ZKCredentials for E2EE
         return c.json({
           user: {
             id: user.uid,
@@ -198,7 +197,6 @@ export const passkeyRouter = new Hono()
             createdAt: user.createdAt,
           },
           token,
-          recoveryKey,
         });
       } catch (error) {
         if (error instanceof ApiException) throw error;

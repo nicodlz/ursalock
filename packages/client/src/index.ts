@@ -3,28 +3,29 @@
  * Auth and API client for zod-vault
  */
 
-export { VaultClient, type VaultClientOptions } from './client.js'
+export { VaultClient, type VaultClientOptions } from "./client.js";
 export {
   PasskeyAuth,
   type PasskeyAuthOptions,
-  type PasskeyCredential,
-} from './passkey.js'
+  type ZKCredential,
+} from "./passkey.js";
 export {
   EmailAuth,
   type EmailAuthOptions,
   type EmailCredentials,
-} from './email.js'
+} from "./email.js";
 export {
   TokenManager,
   type Token,
   type TokenManagerOptions,
-} from './token.js'
+} from "./token.js";
 export {
   type AuthProvider,
   type AuthState,
   type AuthResult,
+  type ZKAuthResult,
   type User,
-} from './types.js'
+} from "./types.js";
 
 // React hooks (tree-shakeable)
 export {
@@ -33,5 +34,6 @@ export {
   useSignIn,
   useSignOut,
   useUser,
+  useCredential,
   usePasskeySupport,
-} from './hooks.js'
+} from "./hooks.js";

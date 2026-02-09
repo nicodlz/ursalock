@@ -2,67 +2,83 @@
  * Common types for auth
  */
 
+import type { ZKCredential } from "@z-base/zero-knowledge-credentials";
+
 /** User object returned by auth */
 export interface User {
-  id: string
-  email?: string
-  createdAt: number
+  id: string;
+  email?: string;
+  createdAt: number;
 }
 
 /** Current authentication state */
 export interface AuthState {
   /** Whether user is authenticated */
-  isAuthenticated: boolean
+  isAuthenticated: boolean;
   /** Current user (if authenticated) */
-  user: User | null
+  user: User | null;
   /** Whether auth is still loading */
-  isLoading: boolean
+  isLoading: boolean;
   /** Auth error (if any) */
-  error: Error | null
+  error: Error | null;
+  /** ZK Credential with derived keys (if authenticated with passkey) */
+  credential: ZKCredential | null;
 }
 
 /** Auth provider interface */
 export interface AuthProvider {
   /** Sign up a new user */
-  signUp(options: SignUpOptions): Promise<AuthResult>
+  signUp(options: SignUpOptions): Promise<ZKAuthResult>;
   /** Sign in an existing user */
-  signIn(options: SignInOptions): Promise<AuthResult>
+  signIn(options: SignInOptions): Promise<ZKAuthResult>;
   /** Sign out the current user */
-  signOut(): Promise<void>
+  signOut(): Promise<void>;
   /** Get current auth state */
-  getState(): AuthState
+  getState(): AuthState;
   /** Subscribe to auth state changes */
-  subscribe(callback: (state: AuthState) => void): () => void
+  subscribe(callback: (state: AuthState) => void): () => void;
 }
 
 /** Sign up options */
 export interface SignUpOptions {
-  email?: string
-  password?: string
+  email?: string;
+  password?: string;
   /** Use passkey instead of email/password */
-  usePasskey?: boolean
+  usePasskey?: boolean;
 }
 
 /** Sign in options */
 export interface SignInOptions {
-  email?: string
-  password?: string
+  email?: string;
+  password?: string;
   /** Use passkey instead of email/password */
-  usePasskey?: boolean
+  usePasskey?: boolean;
 }
 
-/** Result of auth operations */
+/** Result of auth operations (legacy, for email/password) */
 export interface AuthResult {
-  success: boolean
-  user?: User
-  token?: string
-  recoveryKey?: string
-  error?: string
+  success: boolean;
+  user?: User;
+  token?: string;
+  error?: string;
+}
+
+/** Result of ZK auth operations (passkey with PRF) */
+export interface ZKAuthResult {
+  success: boolean;
+  user?: User;
+  token?: string;
+  /** ZK Credential with derived encryption keys */
+  credential?: ZKCredential;
+  error?: string;
 }
 
 /** API error response */
 export interface ApiError {
-  code: string
-  message: string
-  details?: Record<string, unknown>
+  code: string;
+  message: string;
+  details?: Record<string, unknown>;
 }
+
+// Re-export ZKCredential for convenience
+export type { ZKCredential };

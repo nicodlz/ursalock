@@ -1,6 +1,6 @@
 {
   "name": "@zod-vault/crypto",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "E2EE crypto primitives for zod-vault",
   "type": "module",
   "main": "./dist/index.js",
@@ -22,6 +22,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@z-base/cryptosuite": "^1.0.1",
     "hash-wasm": "^4.11.0"
   },
   "devDependencies": {
@@ -35,7 +36,8 @@
     "aes-256-gcm",
     "argon2id",
     "crypto",
-    "zero-knowledge"
+    "zero-knowledge",
+    "jwk"
   ],
   "license": "MIT",
   "author": "Nicolas de Luz <ndlz@pm.me>",

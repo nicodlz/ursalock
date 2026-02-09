@@ -9,6 +9,10 @@ export interface User {
   uid: string;
   email: string | null;
   passwordHash: string | null;
+  /** Opaque ID from ZKCredentials (for passkey-only auth) */
+  opaqueId: string | null;
+  /** Display name (for ZKC users without email) */
+  displayName: string | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -43,7 +47,7 @@ export interface Vault {
   name: string;
   /** Encrypted blob (base64) */
   data: string;
-  /** Salt used for encryption (base64) */
+  /** Salt used for encryption (base64) - empty for JWK mode */
   salt: string;
   /** Schema version for migrations */
   version: number;
@@ -59,14 +63,17 @@ CREATE TABLE IF NOT EXISTS users (
   uid TEXT NOT NULL UNIQUE DEFAULT (lower(hex(randomblob(16)))),
   email TEXT UNIQUE,
   password_hash TEXT,
+  opaque_id TEXT UNIQUE,
+  display_name TEXT,
   created_at INTEGER NOT NULL DEFAULT (unixepoch()),
   updated_at INTEGER NOT NULL DEFAULT (unixepoch())
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_uid ON users(uid);
+CREATE INDEX IF NOT EXISTS idx_users_opaque_id ON users(opaque_id);
 
--- Passkeys table (WebAuthn credentials)
+-- Passkeys table (WebAuthn credentials) - kept for legacy support
 CREATE TABLE IF NOT EXISTS passkeys (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -110,4 +117,14 @@ CREATE TABLE IF NOT EXISTS vaults (
 CREATE INDEX IF NOT EXISTS idx_vaults_uid ON vaults(uid);
 CREATE INDEX IF NOT EXISTS idx_vaults_user_id ON vaults(user_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_vaults_user_name ON vaults(user_id, name);
+`;
+
+/** Migration to add opaque_id and display_name columns */
+export const MIGRATION_ADD_OPAQUE_ID_SQL = `
+-- Add opaque_id column if not exists
+ALTER TABLE users ADD COLUMN opaque_id TEXT UNIQUE;
+-- Add display_name column if not exists  
+ALTER TABLE users ADD COLUMN display_name TEXT;
+-- Create index
+CREATE INDEX IF NOT EXISTS idx_users_opaque_id ON users(opaque_id);
 `;

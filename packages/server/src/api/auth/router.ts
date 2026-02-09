@@ -23,6 +23,7 @@ import {
   type RefreshResponse,
 } from "#api/schemas.js";
 import { passkeyRouter } from "./passkey.js";
+import { zkcRouter } from "./zkc.js";
 
 /**
  * Hash password using PBKDF2
@@ -174,5 +175,7 @@ export const authRouter = new Hono<{
       return c.json({ success: true });
     },
   )
-  // Mount passkey routes under /auth/passkey/*
-  .route("/passkey", passkeyRouter);
+  // Mount passkey routes under /auth/passkey/* (legacy)
+  .route("/passkey", passkeyRouter)
+  // Mount ZKC routes under /auth/zkc/* (new - passkey with PRF)
+  .route("/zkc", zkcRouter);

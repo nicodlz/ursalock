@@ -1,179 +1,166 @@
 /**
- * Passkey (WebAuthn) Authentication
+ * Passkey (WebAuthn PRF) Authentication
+ * Uses @z-base/zero-knowledge-credentials for PRF-based key derivation
  */
 
-import {
-  startRegistration,
-  startAuthentication,
-  browserSupportsWebAuthn,
-} from '@simplewebauthn/browser'
-import type { AuthResult, User } from './types.js'
-
-export interface PasskeyCredential {
-  id: string
-  publicKey: string
-  counter: number
-  deviceType: string
-  backedUp: boolean
-  transports?: string[]
-}
+import { ZKCredentials, type ZKCredential } from "@z-base/zero-knowledge-credentials";
+import type { AuthResult, User, ZKAuthResult } from "./types.js";
 
 export interface PasskeyAuthOptions {
   /** Server URL for WebAuthn endpoints */
-  serverUrl: string
+  serverUrl: string;
   /** RP (Relying Party) name shown to user */
-  rpName?: string
+  rpName?: string;
 }
 
 /**
- * Passkey authentication using WebAuthn
+ * Passkey authentication using WebAuthn PRF extension
+ * Derives encryption keys directly from the passkey - no recovery key needed
  */
 export class PasskeyAuth {
-  private options: Required<PasskeyAuthOptions>
+  private options: Required<PasskeyAuthOptions>;
 
   constructor(options: PasskeyAuthOptions) {
     this.options = {
-      serverUrl: options.serverUrl.replace(/\/$/, ''),
-      rpName: options.rpName ?? 'zod-vault',
-    }
+      serverUrl: options.serverUrl.replace(/\/$/, ""),
+      rpName: options.rpName ?? "zod-vault",
+    };
   }
 
   /**
-   * Check if passkeys are supported in this browser
+   * Check if passkeys with PRF are supported in this browser
    */
   static isSupported(): boolean {
-    return browserSupportsWebAuthn()
+    // Check for basic WebAuthn support
+    if (typeof window === "undefined") return false;
+    if (!window.PublicKeyCredential) return false;
+    return true;
   }
 
   /**
    * Register a new passkey for signup
+   * Creates a passkey with PRF extension and derives encryption keys
    */
-  async register(email?: string): Promise<AuthResult> {
+  async register(displayName?: string): Promise<ZKAuthResult> {
     if (!PasskeyAuth.isSupported()) {
-      return { success: false, error: 'Passkeys not supported in this browser' }
+      return { success: false, error: "Passkeys not supported in this browser" };
     }
 
     try {
-      // 1. Get registration options from server
-      const optionsRes = await fetch(`${this.options.serverUrl}/auth/passkey/register/options`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      })
+      // 1. Create passkey with PRF extension
+      await ZKCredentials.registerCredential(
+        displayName ?? "User",
+        "cross-platform" // Allow platform + cross-platform authenticators
+      );
 
-      if (!optionsRes.ok) {
-        const err = await optionsRes.json()
-        return { success: false, error: err.message ?? 'Failed to get registration options' }
-      }
+      // 2. Discover the credential to get derived keys
+      const credential = await ZKCredentials.discoverCredential();
 
-      const registrationOptions = await optionsRes.json()
-
-      // 2. Create credential using WebAuthn
-      const credential = await startRegistration(registrationOptions)
-
-      // 3. Verify with server
-      const verifyRes = await fetch(`${this.options.serverUrl}/auth/passkey/register/verify`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      // 3. Register with server using the opaque ID
+      const registerRes = await fetch(`${this.options.serverUrl}/auth/zkc/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email,
-          credential,
+          opaqueId: credential.id,
+          displayName,
         }),
-      })
+      });
 
-      if (!verifyRes.ok) {
-        const err = await verifyRes.json()
-        return { success: false, error: err.message ?? 'Failed to verify registration' }
+      if (!registerRes.ok) {
+        const err = await registerRes.json();
+        return { success: false, error: err.message ?? "Failed to register" };
       }
 
-      const result = await verifyRes.json()
-      
+      const result = await registerRes.json();
+
       return {
         success: true,
         user: result.user as User,
         token: result.token,
-        recoveryKey: result.recoveryKey,
-      }
+        credential,
+      };
     } catch (error) {
       // User cancelled or WebAuthn error
-      if (error instanceof Error && error.name === 'NotAllowedError') {
-        return { success: false, error: 'Registration cancelled' }
+      if (error instanceof Error) {
+        if (error.name === "NotAllowedError" || error.message.includes("aborted")) {
+          return { success: false, error: "Registration cancelled" };
+        }
+        return { success: false, error: error.message };
       }
-      return { success: false, error: String(error) }
+      return { success: false, error: String(error) };
     }
   }
 
   /**
    * Authenticate with an existing passkey
+   * Uses discoverCredential to authenticate and derive keys
    */
-  async authenticate(email?: string): Promise<AuthResult> {
+  async authenticate(): Promise<ZKAuthResult> {
     if (!PasskeyAuth.isSupported()) {
-      return { success: false, error: 'Passkeys not supported in this browser' }
+      return { success: false, error: "Passkeys not supported in this browser" };
     }
 
     try {
-      // 1. Get authentication options from server
-      const optionsRes = await fetch(`${this.options.serverUrl}/auth/passkey/login/options`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      })
+      // 1. Discover credential (authenticates + derives keys)
+      const credential = await ZKCredentials.discoverCredential();
 
-      if (!optionsRes.ok) {
-        const err = await optionsRes.json()
-        return { success: false, error: err.message ?? 'Failed to get authentication options' }
+      // 2. Authenticate with server using the opaque ID
+      const authRes = await fetch(`${this.options.serverUrl}/auth/zkc/authenticate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          opaqueId: credential.id,
+        }),
+      });
+
+      if (!authRes.ok) {
+        const err = await authRes.json();
+        return { success: false, error: err.message ?? "Authentication failed" };
       }
 
-      const authOptions = await optionsRes.json()
+      const result = await authRes.json();
 
-      // 2. Get credential from authenticator
-      const credential = await startAuthentication(authOptions)
-
-      // 3. Verify with server
-      const verifyRes = await fetch(`${this.options.serverUrl}/auth/passkey/login/verify`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ credential }),
-      })
-
-      if (!verifyRes.ok) {
-        const err = await verifyRes.json()
-        return { success: false, error: err.message ?? 'Authentication failed' }
-      }
-
-      const result = await verifyRes.json()
-      
       return {
         success: true,
         user: result.user as User,
         token: result.token,
-      }
+        credential,
+      };
     } catch (error) {
       // User cancelled or WebAuthn error
-      if (error instanceof Error && error.name === 'NotAllowedError') {
-        return { success: false, error: 'Authentication cancelled' }
+      if (error instanceof Error) {
+        if (error.name === "NotAllowedError" || error.message.includes("aborted")) {
+          return { success: false, error: "Authentication cancelled" };
+        }
+        if (error.message.includes("no-credential")) {
+          return { success: false, error: "No passkey found. Please sign up first." };
+        }
+        return { success: false, error: error.message };
       }
-      return { success: false, error: String(error) }
+      return { success: false, error: String(error) };
     }
   }
 
   /**
    * Check if user has any registered passkeys
    */
-  async hasPasskey(email: string): Promise<boolean> {
+  async hasPasskey(opaqueId: string): Promise<boolean> {
     try {
-      const res = await fetch(`${this.options.serverUrl}/auth/passkey/check`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      })
-      
-      if (!res.ok) return false
-      
-      const data = await res.json()
-      return data.hasPasskey === true
+      const res = await fetch(`${this.options.serverUrl}/auth/zkc/check`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ opaqueId }),
+      });
+
+      if (!res.ok) return false;
+
+      const data = await res.json();
+      return data.hasPasskey === true;
     } catch {
-      return false
+      return false;
     }
   }
 }
+
+// Re-export ZKCredential type for consumers
+export type { ZKCredential };
