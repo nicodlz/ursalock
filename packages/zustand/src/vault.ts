@@ -10,6 +10,7 @@
 
 import type { StateCreator, StoreApi, StoreMutatorIdentifier } from 'zustand'
 import { createVaultStorage, type VaultStorage } from './storage.js'
+import { createSyncEngine, type SyncEngine, type SyncState } from './sync.js'
 
 /** Vault middleware options */
 export interface VaultOptions<S, PersistedState = S> {
@@ -24,6 +25,12 @@ export interface VaultOptions<S, PersistedState = S> {
    * If not provided, only local encrypted storage is used
    */
   server?: string
+  
+  /**
+   * Auth token getter for server sync
+   * Required if server is provided
+   */
+  getToken?: () => string | null
   
   /** Custom storage implementation */
   storage?: VaultStorage
@@ -61,9 +68,11 @@ export interface VaultOptions<S, PersistedState = S> {
   syncInterval?: number
 }
 
-export type SyncStatus = 'idle' | 'syncing' | 'synced' | 'error'
+export type { SyncStatus, SyncState } from './sync.js'
 
 type VaultListener<S> = (state: S) => void
+
+import type { SyncStatus } from './sync.js'
 
 /** Store shape extended with vault API */
 type StoreVault<S, Ps> = S extends {
@@ -76,12 +85,25 @@ type StoreVault<S, Ps> = S extends {
   setState(...args: Sa1): Sr1 | Promise<void>
   setState(...args: Sa2): Sr2 | Promise<void>
   vault: {
+    /** Full bidirectional sync with server */
     sync: () => Promise<void>
+    /** Push local changes to server */
+    push: () => Promise<void>
+    /** Pull latest from server */
+    pull: () => Promise<boolean>
+    /** Rehydrate from local storage */
     rehydrate: () => Promise<void>
+    /** Check if store has been hydrated */
     hasHydrated: () => boolean
+    /** Get current sync status */
     getSyncStatus: () => SyncStatus
+    /** Check if there are pending offline changes */
+    hasPendingChanges: () => boolean
+    /** Clear all stored data (local + server) */
     clearStorage: () => Promise<void>
+    /** Subscribe to hydration start */
     onHydrate: (fn: VaultListener<T>) => () => void
+    /** Subscribe to hydration complete */
     onFinishHydration: (fn: VaultListener<T>) => () => void
   }
 } : never
@@ -133,6 +155,7 @@ const vaultImpl: VaultImpl = (config, baseOptions) => (set, get, api) => {
     name,
     recoveryKey,
     server,
+    getToken,
     partialize,
     merge,
     onRehydrateStorage,
@@ -148,14 +171,45 @@ const vaultImpl: VaultImpl = (config, baseOptions) => (set, get, api) => {
 
   // State
   let hasHydrated = false
-  let syncStatus: SyncStatus = 'idle'
+  let localUpdatedAt = 0
   const hydrationListeners = new Set<VaultListener<S>>()
   const finishHydrationListeners = new Set<VaultListener<S>>()
+
+  // Create sync engine (if server configured)
+  let syncEngine: SyncEngine | null = null
+  if (server && getToken) {
+    syncEngine = createSyncEngine({
+      serverUrl: server,
+      name,
+      getToken,
+      onServerData: (data, _salt, updatedAt) => {
+        // Server has newer data, update local store
+        try {
+          const parsed = JSON.parse(data) as unknown
+          const merged = merge(parsed, get())
+          set(merged, true)
+          localUpdatedAt = updatedAt
+        } catch (err) {
+          console.error('[zod-vault] Failed to parse server data:', err)
+        }
+      },
+      getLocalData: () => {
+        // Get current encrypted local data
+        const state = partialize({ ...get() })
+        return {
+          data: JSON.stringify(state),
+          salt: '', // Salt is handled by storage layer
+          updatedAt: localUpdatedAt,
+        }
+      },
+    })
+  }
 
   // Persist to storage
   const persistState = async (): Promise<void> => {
     const state = partialize({ ...get() })
     await storage.setItem(name, JSON.stringify(state))
+    localUpdatedAt = Date.now()
   }
 
   // Hydrate from storage
@@ -182,25 +236,36 @@ const vaultImpl: VaultImpl = (config, baseOptions) => (set, get, api) => {
     }
   }
 
-  // Sync with server (if configured)
+  // Sync methods (delegate to sync engine)
   const sync = async (): Promise<void> => {
-    if (!server) return
-    
-    syncStatus = 'syncing'
-    
-    try {
-      // TODO: Implement server sync in Phase 5
-      await persistState()
-      syncStatus = 'synced'
-    } catch (error) {
-      console.error('[zod-vault] Sync failed:', error)
-      syncStatus = 'error'
-    }
+    if (!syncEngine) return
+    await syncEngine.sync()
+  }
+
+  const push = async (): Promise<void> => {
+    if (!syncEngine) return
+    await syncEngine.push()
+  }
+
+  const pull = async (): Promise<boolean> => {
+    if (!syncEngine) return false
+    return syncEngine.pull()
+  }
+
+  const getSyncStatus = () => {
+    if (!syncEngine) return 'idle' as const
+    return syncEngine.getState().status
+  }
+
+  const hasPendingChanges = () => {
+    if (!syncEngine) return false
+    return syncEngine.getState().pendingChanges
   }
 
   // Clear storage
   const clearStorage = async (): Promise<void> => {
     await storage.removeItem(name)
+    syncEngine?.clearQueue()
   }
 
   // Override setState to persist on changes
@@ -236,9 +301,12 @@ const vaultImpl: VaultImpl = (config, baseOptions) => (set, get, api) => {
   const storeWithVault = api as StoreApi<S> & { vault: unknown }
   storeWithVault.vault = {
     sync,
+    push,
+    pull,
     rehydrate,
     hasHydrated: () => hasHydrated,
-    getSyncStatus: () => syncStatus,
+    getSyncStatus,
+    hasPendingChanges,
     clearStorage,
     onHydrate: (cb: VaultListener<S>) => {
       hydrationListeners.add(cb)
