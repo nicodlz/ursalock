@@ -209,11 +209,19 @@ const vaultImpl: VaultImpl = (config, baseOptions) => (set, get, api) => {
       getToken,
       onServerData: (data, _salt, updatedAt) => {
         // Server has newer data, update local store
+        // Only pull if we haven't made local changes since last sync
+        if (localUpdatedAt > updatedAt) {
+          // Local is actually newer - don't overwrite, push instead
+          void syncEngine?.push();
+          return;
+        }
         try {
           const parsed = JSON.parse(data) as unknown;
           const merged = merge(parsed, get());
           set(merged, true);
           localUpdatedAt = updatedAt;
+          // Also persist to local storage to keep in sync
+          void storage.setItem(name, JSON.stringify(partialize({ ...get() })));
         } catch (err) {
           console.error("[zod-vault] Failed to parse server data:", err);
         }
@@ -359,7 +367,12 @@ const vaultImpl: VaultImpl = (config, baseOptions) => (set, get, api) => {
 
   // Auto-hydrate on init (unless skipHydration)
   if (!skipHydration) {
-    void rehydrate();
+    void rehydrate().then(() => {
+      // Sync immediately after hydration to get latest server data
+      if (syncEngine) {
+        void syncEngine.sync();
+      }
+    });
   } else {
     // Even with skipHydration, mark as hydrated to allow persistence
     hasHydrated = true;
