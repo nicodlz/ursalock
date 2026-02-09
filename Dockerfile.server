@@ -22,8 +22,5 @@ ENV DATABASE_PATH=/app/data/vault.db
 
 EXPOSE 3456
 
-# Build the server
-RUN cd packages/server && npx tsup src/server.ts src/index.ts --format esm
-
-# Run the built server
-CMD ["node", "packages/server/dist/server.js"]
+# Run the server with tsx (handles TypeScript + subpath imports)
+CMD ["npx", "tsx", "packages/server/src/server.ts"]
