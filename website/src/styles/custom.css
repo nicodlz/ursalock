@@ -1,97 +1,14 @@
-/* Custom styles for zod-vault docs */
+/* zod-vault docs - minimal customization */
 
-/* Light theme - improved contrast and readability */
-:root,
-:root[data-theme="light"] {
-  --sl-color-accent-low: #dbeafe;
-  --sl-color-accent: #2563eb;
-  --sl-color-accent-high: #1d4ed8;
-  --sl-color-white: #ffffff;
-  --sl-color-gray-1: #f8fafc;
-  --sl-color-gray-2: #e2e8f0;
-  --sl-color-gray-3: #cbd5e1;
-  --sl-color-gray-4: #64748b;
-  --sl-color-gray-5: #475569;
-  --sl-color-gray-6: #1e293b;
-  --sl-color-black: #0f172a;
-  
-  /* Better text contrast */
-  --sl-color-text: #1e293b;
-  --sl-color-text-accent: #1d4ed8;
-  
-  /* Backgrounds */
-  --sl-color-bg: #ffffff;
-  --sl-color-bg-nav: #f8fafc;
-  --sl-color-bg-sidebar: #f1f5f9;
-  --sl-color-bg-inline-code: #e0e7ff;
-  
-  /* Hairlines and borders */
-  --sl-color-hairline: #cbd5e1;
-  --sl-color-hairline-light: #e2e8f0;
+/* Keep Starlight defaults, just add accent color */
+:root {
+  --sl-color-accent-low: #c7d2fe;
+  --sl-color-accent: #4f46e5;
+  --sl-color-accent-high: #312e81;
 }
 
-/* Dark theme */
 :root[data-theme="dark"] {
-  --sl-color-accent-low: #1e1b4b;
-  --sl-color-accent: #6366f1;
-  --sl-color-accent-high: #a5b4fc;
-  --sl-color-gray-4: #94a3b8;
-  --sl-color-gray-5: #64748b;
-  --sl-color-gray-6: #475569;
-}
-
-/* Light mode specific improvements */
-[data-theme="light"] {
-  /* Links */
-  & a:not([class]) {
-    color: var(--sl-color-accent);
-    text-decoration-color: var(--sl-color-accent-low);
-  }
-  
-  & a:not([class]):hover {
-    color: var(--sl-color-accent-high);
-  }
-  
-  /* Sidebar navigation */
-  & nav.sidebar a[aria-current="page"] {
-    background: var(--sl-color-accent-low);
-    color: var(--sl-color-accent-high);
-    font-weight: 600;
-  }
-  
-  /* Code blocks better contrast */
-  & .expressive-code {
-    --ec-codeBg: #f1f5f9;
-    --ec-codeFg: #1e293b;
-    --ec-codeLineBorderActiveWidth: 3px;
-    --ec-brdCol: #cbd5e1;
-  }
-}
-
-/* Hero section styling */
-.hero-title {
-  font-size: 3rem;
-  font-weight: 800;
-  background: linear-gradient(135deg, var(--sl-color-accent) 0%, var(--sl-color-accent-high) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-/* Code blocks */
-.expressive-code pre {
-  border-radius: 0.5rem;
-}
-
-/* Feature cards */
-.feature-card {
-  padding: 1.5rem;
-  border-radius: 0.75rem;
-  background: var(--sl-color-gray-6);
-  border: 1px solid var(--sl-color-gray-5);
-}
-
-[data-theme="light"] .feature-card {
-  background: var(--sl-color-gray-1);
-  border-color: var(--sl-color-gray-2);
+  --sl-color-accent-low: #312e81;
+  --sl-color-accent: #818cf8;
+  --sl-color-accent-high: #c7d2fe;
 }
