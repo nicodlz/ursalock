@@ -99,7 +99,7 @@ export const passkeyRouter = new Hono()
         authenticatorSelection: {
           residentKey: "preferred",
           userVerification: "preferred",
-          authenticatorAttachment: "platform",
+          // No authenticatorAttachment = allow both platform (TouchID) AND cross-platform (Proton Pass, security keys)
         },
         timeout: 60000,
       });
