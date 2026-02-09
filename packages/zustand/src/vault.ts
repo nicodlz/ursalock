@@ -196,6 +196,7 @@ const vaultImpl: VaultImpl = (config, baseOptions) => (set, get, api) => {
   let hasHydrated = false;
   let localUpdatedAt = 0; // Start at 0 - server data wins until we have local changes
   let hasLocalData = false; // Track if we loaded data from local storage
+  let syncDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   const hydrationListeners = new Set<VaultListener<S>>();
   const finishHydrationListeners = new Set<VaultListener<S>>();
 
@@ -229,11 +230,22 @@ const vaultImpl: VaultImpl = (config, baseOptions) => (set, get, api) => {
     });
   }
 
-  // Persist to storage
+  // Persist to storage and trigger debounced sync
   const persistState = async (): Promise<void> => {
     const state = partialize({ ...get() });
     await storage.setItem(name, JSON.stringify(state));
     localUpdatedAt = Date.now();
+    
+    // Debounced sync after changes (3 seconds)
+    if (syncEngine) {
+      if (syncDebounceTimer) {
+        clearTimeout(syncDebounceTimer);
+      }
+      syncDebounceTimer = setTimeout(() => {
+        syncDebounceTimer = null;
+        void syncEngine?.sync();
+      }, 3000);
+    }
   };
 
   // Hydrate from storage
