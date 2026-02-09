@@ -1,140 +1,254 @@
-# 🔐 zod-vault
+<p align="center">
+  <h1 align="center">zod-vault</h1>
+  <p align="center">
+    End-to-end encrypted cloud sync for Zustand stores
+    <br/>
+    Zero-knowledge. Self-hostable. Drop-in replacement for persist().
+  </p>
+</p>
 
-> Drop-in E2EE encrypted cloud sync for Zustand stores
+<p align="center">
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License" /></a>
+  <a href="https://www.npmjs.com/package/@zod-vault/zustand"><img src="https://img.shields.io/npm/v/@zod-vault/zustand.svg" alt="npm" /></a>
+  <a href="https://bundlephobia.com/package/@zod-vault/zustand"><img src="https://img.shields.io/bundlephobia/minzip/@zod-vault/zustand" alt="Bundle Size" /></a>
+</p>
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.4-blue.svg)](https://www.typescriptlang.org/)
-
-**zod-vault** adds end-to-end encrypted cloud sync to your existing Zustand stores. Replace `persist()` with `vault()` and your data is encrypted and synced across devices — zero-knowledge, self-hostable.
-
-## ✨ Features
-
-- **🔄 Drop-in replacement** — Change one line, get encrypted sync
-- **🔒 Zero-knowledge** — Server never sees your data (E2EE with AES-256-GCM)
-- **🔑 Recovery key** — Your data, your key, your control
-- **📱 Passkeys** — Modern auth with WebAuthn (email fallback available)
-- **🏠 Self-hostable** — Single Docker image, SQLite storage
-- **📦 Tiny** — <20KB crypto overhead
-- **🔌 Offline-first** — Works without network, syncs when connected
-
-## 📦 Installation
-
-```bash
-npm install @zod-vault/zustand @zod-vault/client
-# or
-pnpm add @zod-vault/zustand @zod-vault/client
-# or
-bun add @zod-vault/zustand @zod-vault/client
-```
-
-## 🚀 Quick Start
+<br/>
 
 ```typescript
-import { create } from 'zustand'
-import { vault } from '@zod-vault/zustand'
+import { create } from "zustand";
+import { vault } from "@zod-vault/zustand";
+import { VaultClient } from "@zod-vault/client";
 
-// Before (local only)
-const useStore = create(
-  persist(
-    (set) => ({
-      count: 0,
-      increment: () => set((s) => ({ count: s.count + 1 })),
-    }),
-    { name: 'my-store' }
-  )
-)
+// Setup client
+const client = new VaultClient({ serverUrl: "https://vault.example.com" });
 
-// After (encrypted + synced)
+// Create encrypted store
 const useStore = create(
   vault(
     (set) => ({
-      count: 0,
-      increment: () => set((s) => ({ count: s.count + 1 })),
+      notes: [] as string[],
+      addNote: (note: string) => set((s) => ({ notes: [...s.notes, note] })),
     }),
-    { 
-      name: 'my-store',
-      server: 'https://vault.example.com',
+    {
+      name: "my-notes",
+      recoveryKey: "ABCD-EFGH-IJKL-MNOP-QRST-UVWX-YZ23-4567",
+      server: "https://vault.example.com",
+      getToken: () => client.getToken(),
     }
   )
-)
+);
+
+// Sync across devices
+await useStore.vault.sync();
 ```
 
-That's it. Your data is now encrypted client-side and synced across devices.
+## What is zod-vault?
 
-## 🔐 How It Works
+zod-vault adds encrypted cloud sync to Zustand stores. Your data is encrypted client-side before it ever leaves the browser — the server only stores opaque blobs. You control the encryption key.
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                         CLIENT                               │
-│  ┌──────────┐    ┌──────────┐    ┌───────────────────────┐ │
-│  │ Zustand  │ →  │ vault()  │ →  │ AES-256-GCM encrypted │ │
-│  │ Store    │    │ middleware│    │ blob                  │ │
-│  └──────────┘    └──────────┘    └───────────┬───────────┘ │
-│                                               │             │
-└───────────────────────────────────────────────┼─────────────┘
-                                                │ HTTPS
-                                                ▼
-┌─────────────────────────────────────────────────────────────┐
-│                         SERVER                               │
-│  ┌──────────┐    ┌────────────────────────────────────────┐│
-│  │ Hono API │ →  │ SQLite (encrypted blobs only)          ││
-│  └──────────┘    └────────────────────────────────────────┘│
-│                                                             │
-│  Server sees: { id, blob: "a8f3c2e1...", updatedAt }       │
-│  Server NEVER sees: your actual data                        │
-└─────────────────────────────────────────────────────────────┘
+## Features
+
+- **Drop-in replacement** — Swap `persist()` for `vault()`, keep your existing store logic
+- **End-to-end encrypted** — AES-256-GCM encryption, Argon2id key derivation
+- **Zero-knowledge** — Server never sees plaintext data
+- **Recovery key** — 256-bit key you control, not tied to any account
+- **Passkey auth** — WebAuthn support with email fallback
+- **Offline-first** — Queue changes when offline, sync when back online
+- **Self-hostable** — Single Docker image, SQLite storage, no external deps
+- **Lightweight** — ~12KB core middleware (gzipped)
+
+## Installation
+
+```bash
+npm install @zod-vault/zustand @zod-vault/client @zod-vault/crypto
 ```
 
-## 🔑 Recovery Key
+## Packages
 
-When you first use zod-vault, you'll get a recovery key:
+| Package | Description | Size |
+|---------|-------------|------|
+| [@zod-vault/crypto](./packages/crypto) | Encryption primitives (Argon2id, AES-256-GCM) | ~15KB |
+| [@zod-vault/zustand](./packages/zustand) | Zustand middleware | ~12KB |
+| [@zod-vault/client](./packages/client) | Auth client + React hooks | ~20KB |
+| [@zod-vault/server](./packages/server) | Self-hosted backend (Hono + SQLite) | - |
+
+## Quick Start
+
+### 1. Generate a recovery key
+
+```typescript
+import { generateRecoveryKey } from "@zod-vault/crypto";
+
+const recoveryKey = generateRecoveryKey();
+// => "ABCD-EFGH-IJKL-MNOP-QRST-UVWX-YZ23-4567-ABCD-EFGH-IJKL-MNOP-Q"
+
+// Store this safely — it's the only way to decrypt your data
+```
+
+### 2. Setup auth client
+
+```typescript
+import { VaultClient } from "@zod-vault/client";
+
+const client = new VaultClient({
+  serverUrl: "https://vault.example.com",
+});
+
+// Register with email
+await client.registerEmail("user@example.com", "password");
+
+// Or login
+await client.loginEmail("user@example.com", "password");
+```
+
+### 3. Create an encrypted store
+
+```typescript
+import { create } from "zustand";
+import { vault } from "@zod-vault/zustand";
+
+interface NotesState {
+  notes: string[];
+  addNote: (note: string) => void;
+}
+
+const useNotes = create(
+  vault<NotesState>(
+    (set) => ({
+      notes: [],
+      addNote: (note) => set((s) => ({ notes: [...s.notes, note] })),
+    }),
+    {
+      name: "notes",
+      recoveryKey: recoveryKey,
+      server: "https://vault.example.com",
+      getToken: () => client.getToken(),
+    }
+  )
+);
+```
+
+### 4. Sync across devices
+
+```typescript
+// Full sync (push local changes, pull remote changes)
+await useNotes.vault.sync();
+
+// Or granular control
+await useNotes.vault.push();  // Push local → server
+await useNotes.vault.pull();  // Pull server → local
+
+// Check sync status
+useNotes.vault.getSyncStatus();  // "idle" | "syncing" | "synced" | "error" | "offline"
+useNotes.vault.hasPendingChanges();  // true if offline queue has items
+```
+
+### React hooks
+
+```typescript
+import { useVaultAuth, useVaultSync } from "@zod-vault/client";
+
+function App() {
+  const { isAuthenticated, user, login, logout } = useVaultAuth(client);
+  const { status, sync, hasPending } = useVaultSync(useNotes);
+
+  if (!isAuthenticated) {
+    return <LoginForm onSubmit={login} />;
+  }
+
+  return (
+    <div>
+      <p>Logged in as {user.email}</p>
+      <p>Sync status: {status}</p>
+      <button onClick={sync}>Sync now</button>
+    </div>
+  );
+}
+```
+
+## Self-Hosting
+
+### Docker
+
+```bash
+docker run -d \
+  -p 3000:3000 \
+  -e JWT_SECRET="your-secret-key" \
+  -v vault-data:/app/data \
+  ghcr.io/nicodlz/zod-vault-server
+```
+
+### Manual
+
+```bash
+git clone https://github.com/nicodlz/zod-vault.git
+cd zod-vault/packages/server
+npm install
+npm run build
+JWT_SECRET="your-secret-key" npm start
+```
+
+The server exposes:
+
+```
+POST /auth/email/register  - Register with email/password
+POST /auth/email/login     - Login with email/password
+GET  /auth/me              - Get current user
+POST /auth/refresh         - Refresh access token
+POST /auth/logout          - Logout
+
+GET    /vault              - List user's vaults
+POST   /vault              - Create vault
+GET    /vault/:uid         - Get vault
+PUT    /vault/:uid         - Update vault
+DELETE /vault/:uid         - Delete vault
+```
+
+## Recovery Key
+
+The recovery key is a 256-bit key encoded as a human-readable string:
 
 ```
 ABCD-EFGH-IJKL-MNOP-QRST-UVWX-YZ23-4567-ABCD-EFGH-IJKL-MNOP-Q
 ```
 
-**Store this safely!** It's the only way to decrypt your data. Not even the server can recover it.
+- It's the **only way** to decrypt your data
+- The server never sees it
+- If you lose it, your data is gone — by design
 
-## 📚 Packages
+Store it somewhere safe (password manager, printed backup, etc).
 
-| Package | Description |
-|---------|-------------|
-| `@zod-vault/crypto` | Crypto primitives (Argon2id, AES-256-GCM) |
-| `@zod-vault/client` | API client + auth |
-| `@zod-vault/zustand` | Zustand middleware |
-| `@zod-vault/server` | Self-hostable backend |
+## Security
 
-## 🏠 Self-Hosting
+| Layer | Implementation |
+|-------|----------------|
+| Encryption | AES-256-GCM (Web Crypto API) |
+| Key derivation | Argon2id (OWASP 2024 recommended) |
+| Auth | JWT with refresh tokens, WebAuthn passkeys |
+| Transport | HTTPS required in production |
 
-```bash
-docker run -d \
-  -p 3000:3000 \
-  -v vault-data:/data \
-  ghcr.io/nicodlz/zod-vault-server
+All encryption happens client-side. The server is a dumb blob store — it cannot read your data even if compromised.
+
+## Local-only mode
+
+Don't need sync? Use vault without a server:
+
+```typescript
+const useStore = create(
+  vault(
+    (set) => ({ count: 0 }),
+    {
+      name: "local-store",
+      recoveryKey: recoveryKey,
+      // No server = local encrypted storage only
+    }
+  )
+);
 ```
 
-Or deploy to:
-- [Coolify](https://coolify.io)
-- [Railway](https://railway.app)
-- [Fly.io](https://fly.io)
+Data is encrypted and stored in localStorage/IndexedDB.
 
-## 🔒 Security
-
-- **Encryption**: AES-256-GCM (NIST approved, quantum-resistant)
-- **Key Derivation**: Argon2id (OWASP 2026 recommended)
-- **Auth**: Passkeys (WebAuthn) with email fallback
-- **Transport**: HTTPS/TLS 1.3
-
-All crypto happens client-side. The server is a dumb blob store.
-
-## 📖 Documentation
-
-- [Getting Started](./docs/getting-started.md)
-- [API Reference](./docs/api.md)
-- [Self-Hosting Guide](./docs/self-hosting.md)
-- [Migration from persist()](./docs/migration.md)
-- [Security Model](./docs/security.md)
-
-## 📄 License
+## License
 
 MIT © [Nicolas de Luz](https://github.com/nicodlz)
