@@ -38,6 +38,11 @@
     "zero-knowledge"
   ],
   "license": "MIT",
+  "author": "Nicolas de Luz <ndlz@pm.me>",
+  "homepage": "https://github.com/nicodlz/zod-vault#readme",
+  "bugs": {
+    "url": "https://github.com/nicodlz/zod-vault/issues"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/nicodlz/zod-vault.git",
