@@ -86,14 +86,85 @@ describe('TokenManager', () => {
     expect(TokenManager.parseToken('invalid')).toBeNull()
     expect(TokenManager.parseToken('')).toBeNull()
   })
+
+  it('refreshes token from server', async () => {
+    const mockFetch = vi.fn()
+    vi.stubGlobal('fetch', mockFetch)
+
+    // Mock successful refresh response
+    const newExpiry = Math.floor((Date.now() + 3600000) / 1000) // 1h from now
+    const newPayload = btoa(JSON.stringify({ sub: '123', exp: newExpiry }))
+    const newToken = `header.${newPayload}.signature`
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ token: newToken }),
+    })
+
+    const manager = new TokenManager({
+      serverUrl: 'http://test.com',
+    })
+
+    // Set initial token
+    manager.setToken({
+      accessToken: 'old-token',
+      expiresAt: Date.now() + 60000,
+    })
+
+    const success = await manager.refresh()
+    
+    expect(success).toBe(true)
+    expect(manager.getAccessToken()).toBe(newToken)
+    expect(mockFetch).toHaveBeenCalledWith(
+      'http://test.com/auth/refresh',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          'Authorization': 'Bearer old-token',
+        }),
+      })
+    )
+  })
+
+  it('returns false when refresh fails', async () => {
+    const mockFetch = vi.fn()
+    vi.stubGlobal('fetch', mockFetch)
+
+    mockFetch.mockResolvedValueOnce({ ok: false })
+
+    const manager = new TokenManager({
+      serverUrl: 'http://test.com',
+    })
+
+    manager.setToken({
+      accessToken: 'old-token',
+      expiresAt: Date.now() + 60000,
+    })
+
+    const success = await manager.refresh()
+    
+    expect(success).toBe(false)
+    expect(manager.getAccessToken()).toBe('old-token') // Unchanged
+  })
+
+  it('returns false without serverUrl', async () => {
+    const manager = new TokenManager() // No serverUrl
+    manager.setToken({
+      accessToken: 'token',
+      expiresAt: Date.now() + 60000,
+    })
+
+    const success = await manager.refresh()
+    expect(success).toBe(false)
+  })
 })
 
 describe('EmailAuth', () => {
-  const mockFetch = vi.fn()
-  vi.stubGlobal('fetch', mockFetch)
+  let mockFetch: ReturnType<typeof vi.fn>
 
   beforeEach(() => {
-    mockFetch.mockReset()
+    mockFetch = vi.fn()
+    vi.stubGlobal('fetch', mockFetch)
   })
 
   it('validates email format on register', async () => {

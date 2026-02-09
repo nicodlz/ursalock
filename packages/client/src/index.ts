@@ -19,4 +19,19 @@ export {
   type Token,
   type TokenManagerOptions,
 } from './token.js'
-export { type AuthProvider, type AuthState, type User } from './types.js'
+export {
+  type AuthProvider,
+  type AuthState,
+  type AuthResult,
+  type User,
+} from './types.js'
+
+// React hooks (tree-shakeable)
+export {
+  useAuth,
+  useSignUp,
+  useSignIn,
+  useSignOut,
+  useUser,
+  usePasskeySupport,
+} from './hooks.js'
