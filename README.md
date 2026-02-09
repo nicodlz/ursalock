@@ -135,10 +135,6 @@ All crypto happens client-side. The server is a dumb blob store.
 - [Migration from persist()](./docs/migration.md)
 - [Security Model](./docs/security.md)
 
-## 🤝 Contributing
-
-Contributions welcome! Please read our [Contributing Guide](./CONTRIBUTING.md).
-
 ## 📄 License
 
 MIT © [Nicolas de Luz](https://github.com/nicodlz)
