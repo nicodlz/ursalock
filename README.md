@@ -8,6 +8,7 @@
 </p>
 
 <p align="center">
+  <a href="https://zod-vault.ndlz.net"><img src="https://img.shields.io/badge/docs-zod--vault.ndlz.net-blue.svg" alt="Documentation" /></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License" /></a>
   <a href="https://www.npmjs.com/package/@zod-vault/zustand"><img src="https://img.shields.io/npm/v/@zod-vault/zustand.svg" alt="npm" /></a>
   <a href="https://bundlephobia.com/package/@zod-vault/zustand"><img src="https://img.shields.io/bundlephobia/minzip/@zod-vault/zustand" alt="Bundle Size" /></a>
@@ -248,6 +249,10 @@ const useStore = create(
 ```
 
 Data is encrypted and stored in localStorage/IndexedDB.
+
+## Documentation
+
+Full documentation available at **[zod-vault.ndlz.net](https://zod-vault.ndlz.net)**
 
 ## License
 
