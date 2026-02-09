@@ -173,9 +173,10 @@ export class VaultClient {
 
   /**
    * Get current auth state
+   * Returns the same reference unless state changes (required for useSyncExternalStore)
    */
   getState(): AuthState {
-    return { ...this.state }
+    return this.state
   }
 
   /**
