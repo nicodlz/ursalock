@@ -34,7 +34,7 @@ import { generateRecoveryKey } from "#features/crypto/recovery.js";
 import { getRpConfigFromRequest } from "#features/auth/origin.js";
 
 // In-memory challenge store (should use Redis in production)
-const challengeStore = new Map<string, { challenge: string; userId?: number; expiresAt: number }>();
+const challengeStore = new Map<string, { challenge: string; email?: string; userId?: number; expiresAt: number }>();
 
 // Cleanup expired challenges periodically
 setInterval(() => {
@@ -104,10 +104,11 @@ export const passkeyRouter = new Hono()
         timeout: 60000,
       });
 
-      // Store challenge for verification
-      const challengeKey = email ?? tempUserId;
-      challengeStore.set(challengeKey, {
+      // Store challenge for verification - use challenge itself as key
+      // This works because the challenge is returned to client and sent back in verify
+      challengeStore.set(options.challenge, {
         challenge: options.challenge,
+        email: email ?? undefined,
         expiresAt: Date.now() + 120000, // 2 min expiry
       });
 
@@ -123,17 +124,25 @@ export const passkeyRouter = new Hono()
       const { email, credential } = c.req.valid("json");
       const response = credential as RegistrationResponseJSON;
 
-      // Get stored challenge
-      const challengeKey = email ?? response.id;
-      const stored = challengeStore.get(challengeKey);
+      // Decode clientDataJSON to extract challenge
+      const clientDataJSON = JSON.parse(
+        Buffer.from(response.response.clientDataJSON, "base64url").toString("utf-8")
+      );
+      const challenge = clientDataJSON.challenge;
+
+      // Get stored challenge data
+      const stored = challengeStore.get(challenge);
       
       if (!stored) {
         throw new ApiException(errors.invalid_credentials as ApiError, 401);
       }
 
+      // Use email from request or from stored challenge data
+      const userEmail = email ?? stored.email;
+
       // Check for existing user with email
-      if (email) {
-        const existing = getUserByEmail(email);
+      if (userEmail) {
+        const existing = getUserByEmail(userEmail);
         if (existing) {
           throw new ApiException(errors.email_already_exists as ApiError, 409);
         }
@@ -157,7 +166,7 @@ export const passkeyRouter = new Hono()
         const { credentialID, credentialPublicKey, counter, credentialDeviceType, credentialBackedUp } = verification.registrationInfo;
 
         // Create user
-        const user = createUser({ email: email ?? undefined, passwordHash: undefined });
+        const user = createUser({ email: userEmail ?? undefined, passwordHash: undefined });
 
         // Store passkey
         createPasskey({
@@ -174,13 +183,13 @@ export const passkeyRouter = new Hono()
         const recoveryKey = generateRecoveryKey();
 
         // Create session
-        const token = await createToken({ userId: user.uid, email: email ?? undefined });
+        const token = await createToken({ userId: user.uid, email: userEmail ?? undefined });
         const tokenHash = hashToken(token);
         const expiresAt = Math.floor(Date.now() / 1000) + env.JWT_EXPIRY;
         createSession({ userId: user.id, tokenHash, expiresAt });
 
         // Clean up challenge
-        challengeStore.delete(challengeKey);
+        challengeStore.delete(challenge);
 
         return c.json({
           user: {
