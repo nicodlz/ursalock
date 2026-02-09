@@ -47,45 +47,39 @@ export class ApiException extends Error {
   }
 }
 
-/** Error factories - static objects or functions */
-type ErrorFactory = ApiError | ((...args: string[]) => ApiError);
-
-type ErrorFactoryMap = {
-  [K in ErrorCode]: ErrorFactory;
-};
-
-export const errors: ErrorFactoryMap = {
+/** Error factories - typed specifically for each error */
+export const errors = {
   // Auth errors
-  unauthorized: { code: "unauthorized", message: "Unauthorized" },
-  invalid_credentials: { code: "invalid_credentials", message: "Invalid email or password" },
-  email_already_exists: { code: "email_already_exists", message: "Email already registered" },
-  passkey_not_found: { code: "passkey_not_found", message: "Passkey not found" },
-  session_expired: { code: "session_expired", message: "Session expired" },
+  unauthorized: { code: "unauthorized" as const, message: "Unauthorized" },
+  invalid_credentials: { code: "invalid_credentials" as const, message: "Invalid email or password" },
+  email_already_exists: { code: "email_already_exists" as const, message: "Email already registered" },
+  passkey_not_found: { code: "passkey_not_found" as const, message: "Passkey not found" },
+  session_expired: { code: "session_expired" as const, message: "Session expired" },
   
   // Vault errors
-  vault_not_found: { code: "vault_not_found", message: "Vault not found" },
-  vault_already_exists: (name: string) => ({
+  vault_not_found: { code: "vault_not_found" as const, message: "Vault not found" },
+  vault_already_exists: (name: string): ApiError => ({
     code: "vault_already_exists",
     message: `Vault "${name}" already exists`,
   }),
-  invalid_vault_data: { code: "invalid_vault_data", message: "Invalid vault data" },
+  invalid_vault_data: { code: "invalid_vault_data" as const, message: "Invalid vault data" },
   
   // Validation errors
-  validation_error: (details: string) => ({
+  validation_error: (details: string): ApiError => ({
     code: "validation_error",
     message: details,
   }),
-  invalid_request: { code: "invalid_request", message: "Invalid request" },
+  invalid_request: { code: "invalid_request" as const, message: "Invalid request" },
   
   // Server errors
-  internal_error: { code: "internal_error", message: "Internal server error" },
+  internal_error: { code: "internal_error" as const, message: "Internal server error" },
 };
 
 /** Helper to get error object from factory */
-export function getError(code: ErrorCode, ...args: string[]): ApiError {
+export function getError(code: ErrorCode, arg?: string): ApiError {
   const factory = errors[code];
   if (typeof factory === "function") {
-    return factory(...args);
+    return factory(arg ?? "");
   }
-  return factory;
+  return factory as ApiError;
 }

@@ -1,5 +1,5 @@
 /**
- * Auth router - email/password authentication
+ * Auth router - email/password + passkey authentication
  */
 
 import { createHash, randomBytes } from "node:crypto";
@@ -22,6 +22,7 @@ import {
   type MeResponse,
   type RefreshResponse,
 } from "#api/schemas.js";
+import { passkeyRouter } from "./passkey.js";
 
 /**
  * Hash password using PBKDF2
@@ -172,4 +173,6 @@ export const authRouter = new Hono<{
       }
       return c.json({ success: true });
     },
-  );
+  )
+  // Mount passkey routes under /auth/passkey/*
+  .route("/passkey", passkeyRouter);
