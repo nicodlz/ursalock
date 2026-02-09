@@ -1,6 +1,6 @@
 {
   "name": "@zod-vault/zustand",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Encrypted persistence middleware for Zustand with passkey E2EE",
   "type": "module",
   "main": "./dist/index.js",
