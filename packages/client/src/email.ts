@@ -2,9 +2,21 @@
  * Email/Password Authentication (fallback)
  * Note: Email auth doesn't provide PRF-derived encryption keys.
  * For E2EE, use passkey authentication instead.
+ * 
+ * Refactored to follow SOLID principles:
+ * - Implements IAuthProvider interface (Open/Closed + Dependency Inversion)
+ * - Injectable HTTP client (Dependency Inversion)
  */
 
-import type { AuthResult, User } from "./types.js";
+import type { User } from "./types.js";
+import type { 
+  IAuthProvider, 
+  ZKAuthResult,
+  EmailSignUpOptions,
+  EmailSignInOptions
+} from "./interfaces/auth-provider.js";
+import type { IHttpClient } from "./interfaces/http-client.js";
+import { FetchHttpClient } from "./interfaces/http-client.js";
 
 export interface EmailCredentials {
   email: string;
@@ -14,26 +26,41 @@ export interface EmailCredentials {
 export interface EmailAuthOptions {
   /** Server URL for auth endpoints */
   serverUrl: string;
+  /** HTTP client for making requests (default: FetchHttpClient) */
+  httpClient?: IHttpClient;
 }
 
 /**
  * Email/password authentication (fallback for non-passkey browsers)
  * Note: Email auth doesn't derive encryption keys - use passkeys for E2EE
+ * Implements IAuthProvider for pluggable auth (Open/Closed Principle)
  */
-export class EmailAuth {
+export class EmailAuth implements IAuthProvider {
   private options: Required<EmailAuthOptions>;
+  private httpClient: IHttpClient;
 
   constructor(options: EmailAuthOptions) {
     this.options = {
       serverUrl: options.serverUrl.replace(/\/$/, ""),
+      httpClient: options.httpClient ?? new FetchHttpClient(),
     };
+    this.httpClient = this.options.httpClient;
+  }
+
+  getName(): string {
+    return "email";
+  }
+
+  isSupported(): boolean {
+    return true; // Email auth is always supported
   }
 
   /**
-   * Register a new account with email/password
+   * Sign up - Register a new account with email/password
+   * Implements IAuthProvider.signUp
    */
-  async register(credentials: EmailCredentials): Promise<AuthResult> {
-    const { email, password } = credentials;
+  async signUp(options: unknown): Promise<ZKAuthResult> {
+    const { email, password } = options as EmailSignUpOptions;
 
     // Validate inputs
     if (!email || !this.isValidEmail(email)) {
@@ -44,11 +71,14 @@ export class EmailAuth {
     }
 
     try {
-      const res = await fetch(`${this.options.serverUrl}/auth/email/register`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
+      const res = await this.httpClient.fetch(
+        `${this.options.serverUrl}/auth/email/register`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        }
+      );
 
       if (!res.ok) {
         const err = await res.json();
@@ -64,6 +94,7 @@ export class EmailAuth {
         success: true,
         user: result.user as User,
         token: result.token,
+        // Email auth doesn't provide encryption keys
       };
     } catch {
       return { success: false, error: "Network error" };
@@ -71,21 +102,25 @@ export class EmailAuth {
   }
 
   /**
-   * Sign in with email/password
+   * Sign in - Authenticate with email/password
+   * Implements IAuthProvider.signIn
    */
-  async signIn(credentials: EmailCredentials): Promise<AuthResult> {
-    const { email, password } = credentials;
+  async signIn(options: unknown): Promise<ZKAuthResult> {
+    const { email, password } = options as EmailSignInOptions;
 
     if (!email || !password) {
       return { success: false, error: "Email and password required" };
     }
 
     try {
-      const res = await fetch(`${this.options.serverUrl}/auth/email/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
+      const res = await this.httpClient.fetch(
+        `${this.options.serverUrl}/auth/email/login`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        }
+      );
 
       if (!res.ok) {
         const err = await res.json();
@@ -101,10 +136,19 @@ export class EmailAuth {
         success: true,
         user: result.user as User,
         token: result.token,
+        // Email auth doesn't provide encryption keys
       };
     } catch {
       return { success: false, error: "Network error" };
     }
+  }
+
+  /**
+   * Legacy method - kept for backward compatibility
+   * @deprecated Use signUp() instead
+   */
+  async register(credentials: EmailCredentials): Promise<ZKAuthResult> {
+    return this.signUp(credentials);
   }
 
   /**
@@ -116,11 +160,14 @@ export class EmailAuth {
     }
 
     try {
-      await fetch(`${this.options.serverUrl}/auth/email/forgot-password`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      });
+      await this.httpClient.fetch(
+        `${this.options.serverUrl}/auth/email/forgot-password`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email }),
+        }
+      );
 
       // Always return success to prevent email enumeration
       return { success: true };
@@ -138,11 +185,14 @@ export class EmailAuth {
     }
 
     try {
-      const res = await fetch(`${this.options.serverUrl}/auth/email/reset-password`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, password: newPassword }),
-      });
+      const res = await this.httpClient.fetch(
+        `${this.options.serverUrl}/auth/email/reset-password`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token, password: newPassword }),
+        }
+      );
 
       if (!res.ok) {
         const err = await res.json();
@@ -168,14 +218,17 @@ export class EmailAuth {
     }
 
     try {
-      const res = await fetch(`${this.options.serverUrl}/auth/email/change-password`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${authToken}`,
-        },
-        body: JSON.stringify({ currentPassword, newPassword }),
-      });
+      const res = await this.httpClient.fetch(
+        `${this.options.serverUrl}/auth/email/change-password`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${authToken}`,
+          },
+          body: JSON.stringify({ currentPassword, newPassword }),
+        }
+      );
 
       if (!res.ok) {
         const err = await res.json();
