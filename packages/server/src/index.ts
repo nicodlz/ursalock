@@ -1,5 +1,5 @@
 /**
- * @zod-vault/server
+ * @ursalock/server
  * Self-hostable E2EE vault server with SQLite
  */
 

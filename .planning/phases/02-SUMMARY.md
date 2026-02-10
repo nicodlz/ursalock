@@ -1,7 +1,7 @@
 # Phase 2 Summary: Zustand Middleware
 
 ## Deliverables
-- `@zod-vault/zustand` package (4.89 KB)
+- `@ursalock/zustand` package (4.89 KB)
 - `vault()` middleware - drop-in replacement for zustand persist()
 - `createVaultStorage()` - encrypted localStorage wrapper
 - Manual TypeScript types for public API
@@ -47,7 +47,7 @@ Options:
 ```typescript
 const storage = createVaultStorage({
   recoveryKey: '...',
-  prefix: 'custom:'  // default: 'zod-vault:'
+  prefix: 'custom:'  // default: 'ursalock:'
 })
 ```
 

@@ -1,5 +1,5 @@
 ---
-title: "@zod-vault/zustand"
+title: "@ursalock/zustand"
 description: Zustand middleware API reference
 ---
 
@@ -8,7 +8,7 @@ Encrypted persistence middleware for Zustand stores.
 ## Installation
 
 ```bash
-npm install @zod-vault/zustand @zod-vault/crypto zustand
+npm install @ursalock/zustand @ursalock/crypto zustand
 ```
 
 ## vault
@@ -17,8 +17,8 @@ The main middleware that adds encrypted persistence and cloud sync.
 
 ```typescript
 import { create, type StateCreator } from "zustand";
-import { vault, type VaultOptionsJwk } from "@zod-vault/zustand";
-import type { CipherJWK } from "@zod-vault/crypto";
+import { vault, type VaultOptionsJwk } from "@ursalock/zustand";
+import type { CipherJWK } from "@ursalock/crypto";
 
 interface MyState {
   count: number;
@@ -57,7 +57,7 @@ Options for the vault middleware using a JWK encryption key (derived from passke
 | `skipHydration` | `boolean` | No | `false` | Skip auto-hydration on init |
 | `syncInterval` | `number` | No | `30000` | Auto-sync interval in ms (0 to disable) |
 | `storage` | `VaultStorage` | No | localStorage | Custom storage backend |
-| `prefix` | `string` | No | `"zod-vault:"` | Storage key prefix |
+| `prefix` | `string` | No | `"ursalock:"` | Storage key prefix |
 | `onRehydrateStorage` | `(state) => callback` | No | - | Hydration lifecycle hook |
 
 ### Example with All Options
@@ -215,7 +215,7 @@ const unsubscribe = store.vault.onFinishHydration((state) => {
 React hook for sync status with auto-updates.
 
 ```typescript
-import { useSyncStatus } from "@zod-vault/zustand";
+import { useSyncStatus } from "@ursalock/zustand";
 
 function SyncIndicator() {
   const status = useSyncStatus(store);
@@ -232,7 +232,7 @@ import type {
   VaultOptionsLegacy,
   SyncStatus,
   VaultStorage,
-} from "@zod-vault/zustand";
+} from "@ursalock/zustand";
 
 type SyncStatus = "idle" | "syncing" | "synced" | "error" | "offline";
 
@@ -251,7 +251,7 @@ interface VaultOptionsJwk<S, PersistedState = S> {
 }
 
 // For CipherJWK type
-import type { CipherJWK } from "@zod-vault/crypto";
+import type { CipherJWK } from "@ursalock/crypto";
 ```
 
 ## VaultOptionsLegacy (Deprecated)
@@ -259,7 +259,7 @@ import type { CipherJWK } from "@zod-vault/crypto";
 For backward compatibility, you can use a recovery key string instead of cipherJwk:
 
 ```typescript
-import type { VaultOptionsLegacy } from "@zod-vault/zustand";
+import type { VaultOptionsLegacy } from "@ursalock/zustand";
 
 const options: VaultOptionsLegacy<MyState> = {
   name: "my-store",
@@ -275,7 +275,7 @@ const options: VaultOptionsLegacy<MyState> = {
 Create a custom encrypted storage backend.
 
 ```typescript
-import { createVaultStorage, type JwkEncryptedStorageOptions } from "@zod-vault/zustand";
+import { createVaultStorage, type JwkEncryptedStorageOptions } from "@ursalock/zustand";
 
 const storage = createVaultStorage({
   cipherJwk,

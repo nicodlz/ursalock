@@ -9,7 +9,7 @@ import { closeDb } from "#db/client.js";
 
 const app = createApp();
 
-console.log(`🔐 zod-vault server starting...`);
+console.log(`🔐 ursalock server starting...`);
 console.log(`   Environment: ${env.NODE_ENV}`);
 console.log(`   Database: ${env.DATABASE_PATH}`);
 

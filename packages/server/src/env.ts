@@ -21,7 +21,7 @@ const envSchema = {
   JWT_EXPIRY: numeric.default("604800"),
   
   /** Relying Party name shown during passkey registration */
-  RP_NAME: z.string().default("zod-vault"),
+  RP_NAME: z.string().default("ursalock"),
   
   /** 
    * Allowed origins for WebAuthn (comma-separated)

@@ -28,19 +28,19 @@ Phase 6: Documentation and npm publish prep.
 ## Test Summary
 | Package | Tests |
 |---------|-------|
-| @zod-vault/crypto | 22 |
-| @zod-vault/zustand | 19 |
-| @zod-vault/client | 15 |
-| @zod-vault/server | 18 |
+| @ursalock/crypto | 22 |
+| @ursalock/zustand | 19 |
+| @ursalock/client | 15 |
+| @ursalock/server | 18 |
 | **Total** | **74** |
 
 ## Bundle Sizes (gzipped)
 | Package | Size |
 |---------|------|
-| @zod-vault/crypto | 3.5 KB |
-| @zod-vault/zustand | 5.7 KB |
-| @zod-vault/client | 6.6 KB |
-| @zod-vault/server | 8.0 KB |
+| @ursalock/crypto | 3.5 KB |
+| @ursalock/zustand | 5.7 KB |
+| @ursalock/client | 6.6 KB |
+| @ursalock/server | 8.0 KB |
 
 ## Commits
 | Hash | Description |

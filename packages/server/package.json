@@ -1,7 +1,7 @@
 {
-  "name": "@zod-vault/server",
+  "name": "@ursalock/server",
   "version": "0.2.0",
-  "description": "Self-hostable zod-vault server with SQLite and ZKCredentials support",
+  "description": "Self-hostable ursalock server with SQLite and ZKCredentials support",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -44,7 +44,7 @@
     "vitest": "^1.6.0"
   },
   "keywords": [
-    "zod-vault",
+    "ursalock",
     "server",
     "e2ee",
     "sqlite",
@@ -54,13 +54,13 @@
   ],
   "license": "MIT",
   "author": "Nicolas de Luz <ndlz@pm.me>",
-  "homepage": "https://github.com/nicodlz/zod-vault#readme",
+  "homepage": "https://github.com/nicodlz/ursalock#readme",
   "bugs": {
-    "url": "https://github.com/nicodlz/zod-vault/issues"
+    "url": "https://github.com/nicodlz/ursalock/issues"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/nicodlz/zod-vault.git",
+    "url": "https://github.com/nicodlz/ursalock.git",
     "directory": "packages/server"
   }
 }

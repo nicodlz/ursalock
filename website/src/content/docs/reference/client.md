@@ -1,14 +1,14 @@
 ---
-title: "@zod-vault/client"
+title: "@ursalock/client"
 description: Authentication client API reference
 ---
 
-Passkey-based authentication client for zod-vault.
+Passkey-based authentication client for ursalock.
 
 ## Installation
 
 ```bash
-npm install @zod-vault/client
+npm install @ursalock/client
 ```
 
 ## VaultClient
@@ -16,7 +16,7 @@ npm install @zod-vault/client
 The main client for authentication and session management.
 
 ```typescript
-import { VaultClient } from "@zod-vault/client";
+import { VaultClient } from "@ursalock/client";
 
 const vaultClient = new VaultClient({
   serverUrl: "https://vault.example.com",
@@ -27,7 +27,7 @@ const vaultClient = new VaultClient({
 
 | Option | Type | Required | Default | Description |
 |--------|------|----------|---------|-------------|
-| `serverUrl` | `string` | Yes | - | Base URL of your zod-vault server |
+| `serverUrl` | `string` | Yes | - | Base URL of your ursalock server |
 
 ## React Hooks
 
@@ -36,7 +36,7 @@ const vaultClient = new VaultClient({
 Register a new user with a passkey.
 
 ```typescript
-import { useSignUp } from "@zod-vault/client";
+import { useSignUp } from "@ursalock/client";
 
 function SignUp() {
   const { signUp, isLoading, error } = useSignUp(vaultClient);
@@ -66,7 +66,7 @@ function SignUp() {
 Authenticate an existing user.
 
 ```typescript
-import { useSignIn } from "@zod-vault/client";
+import { useSignIn } from "@ursalock/client";
 
 function SignIn() {
   const { signIn, isLoading, error } = useSignIn(vaultClient);
@@ -92,7 +92,7 @@ function SignIn() {
 Check if WebAuthn is supported.
 
 ```typescript
-import { usePasskeySupport } from "@zod-vault/client";
+import { usePasskeySupport } from "@ursalock/client";
 
 function AuthGate({ children }) {
   const supportsPasskey = usePasskeySupport(vaultClient);
@@ -128,7 +128,7 @@ Short-lived auth token:
 Encryption key derived from passkey:
 - Lives only in memory (not persisted)
 - Lost on page refresh (requires re-auth)
-- Used by `@zod-vault/zustand` for encryption
+- Used by `@ursalock/zustand` for encryption
 
 ## Client Methods
 
@@ -199,7 +199,7 @@ if (!result.success) {
 ## Types
 
 ```typescript
-import type { ZKCredential, SignUpResult, SignInResult } from "@zod-vault/client";
+import type { ZKCredential, SignUpResult, SignInResult } from "@ursalock/client";
 
 interface SignUpResult {
   success: boolean;
@@ -223,7 +223,7 @@ interface ZKCredential {
 
 ```tsx
 import { useState } from "react";
-import { VaultClient, useSignUp, useSignIn, usePasskeySupport, type ZKCredential } from "@zod-vault/client";
+import { VaultClient, useSignUp, useSignIn, usePasskeySupport, type ZKCredential } from "@ursalock/client";
 
 const vaultClient = new VaultClient({
   serverUrl: "https://vault.example.com",

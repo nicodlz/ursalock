@@ -1,6 +1,6 @@
 # Migration from persist()
 
-Migrating from Zustand's `persist()` middleware to zod-vault's `vault()` is straightforward.
+Migrating from Zustand's `persist()` middleware to ursalock's `vault()` is straightforward.
 
 ## Basic Migration
 
@@ -27,7 +27,7 @@ const useStore = create(
 
 ```typescript
 import { create } from "zustand";
-import { vault } from "@zod-vault/zustand";
+import { vault } from "@ursalock/zustand";
 
 const useStore = create(
   vault(
@@ -160,7 +160,7 @@ Types work the same way. Just import from the new package:
 import type { PersistOptions } from "zustand/middleware";
 
 // After
-import type { VaultOptions } from "@zod-vault/zustand";
+import type { VaultOptions } from "@ursalock/zustand";
 ```
 
 ## Testing

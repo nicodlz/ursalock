@@ -1,14 +1,14 @@
 ---
 title: Quick Start
-description: Get up and running with zod-vault in 5 minutes
+description: Get up and running with ursalock in 5 minutes
 ---
 
-This guide walks you through setting up zod-vault in a React application with passkey-based E2EE.
+This guide walks you through setting up ursalock in a React application with passkey-based E2EE.
 
 ## Installation
 
 ```bash
-npm install @zod-vault/zustand @zod-vault/client @zod-vault/crypto
+npm install @ursalock/zustand @ursalock/client @ursalock/crypto
 ```
 
 ## How It Works
@@ -24,7 +24,7 @@ Same passkey = same encryption key = same data on any device.
 
 ```typescript
 // lib/vault-client.ts
-import { VaultClient } from "@zod-vault/client";
+import { VaultClient } from "@ursalock/client";
 
 export const vaultClient = new VaultClient({
   serverUrl: "https://vault.example.com",
@@ -36,8 +36,8 @@ export const vaultClient = new VaultClient({
 ```typescript
 // stores/notes.ts
 import { create, type StateCreator } from "zustand";
-import { vault, type VaultOptionsJwk } from "@zod-vault/zustand";
-import type { CipherJWK } from "@zod-vault/crypto";
+import { vault, type VaultOptionsJwk } from "@ursalock/zustand";
+import type { CipherJWK } from "@ursalock/crypto";
 import { vaultClient } from "../lib/vault-client";
 
 interface NotesState {
@@ -85,7 +85,7 @@ export function useNotes<T>(selector: (state: NotesState) => T): T {
 ```tsx
 // components/Auth.tsx
 import { useState } from "react";
-import { useSignUp, useSignIn, type ZKCredential } from "@zod-vault/client";
+import { useSignUp, useSignIn, type ZKCredential } from "@ursalock/client";
 import { vaultClient } from "../lib/vault-client";
 
 interface AuthProps {
@@ -124,7 +124,7 @@ export function Auth({ onAuthenticated }: AuthProps) {
 ```tsx
 // App.tsx
 import { useState } from "react";
-import type { ZKCredential } from "@zod-vault/client";
+import type { ZKCredential } from "@ursalock/client";
 import { Auth } from "./components/Auth";
 import { Notes } from "./components/Notes";
 import { initNotesStore } from "./stores/notes";

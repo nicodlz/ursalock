@@ -30,7 +30,7 @@ ABCD-EFGH-IJKL-MNOP-QRST-UVWX-YZ23-4567-ABCD-EFGH-IJKL-MNOP-Q
 ## Generating a Key
 
 ```typescript
-import { generateRecoveryKey } from "@zod-vault/crypto";
+import { generateRecoveryKey } from "@ursalock/crypto";
 
 const recoveryKey = generateRecoveryKey();
 ```
@@ -41,7 +41,7 @@ Uses `crypto.getRandomValues()` for cryptographic randomness.
 
 ```typescript
 import { create } from "zustand";
-import { vault, type VaultOptionsLegacy } from "@zod-vault/zustand";
+import { vault, type VaultOptionsLegacy } from "@ursalock/zustand";
 
 const options: VaultOptionsLegacy<MyState> = {
   name: "my-store",
@@ -81,7 +81,7 @@ Store in 1Password, Bitwarden, Proton Pass, etc.
 
 ```
 ╔═══════════════════════════════════════════════════╗
-║              zod-vault Recovery Key                ║
+║              ursalock Recovery Key                ║
 ║                                                   ║
 ║  ABCD-EFGH-IJKL-MNOP-QRST-UVWX-YZ23-4567        ║
 ║  ABCD-EFGH-IJKL-MNOP-Q                           ║

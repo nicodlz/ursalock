@@ -4,7 +4,7 @@
 **Status:** Executing
 
 ## Goal
-Refactor zod-vault packages to follow SOLID principles.
+Refactor ursalock packages to follow SOLID principles.
 
 ## SOLID Principles
 - **S**ingle Responsibility: Each module/class does one thing

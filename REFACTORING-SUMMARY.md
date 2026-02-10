@@ -1,4 +1,4 @@
-# SOLID Refactoring Summary - zod-vault
+# SOLID Refactoring Summary - ursalock
 
 ## Overview
 Successfully refactored all 4 packages (`crypto`, `zustand`, `client`, `server`) to follow SOLID principles while maintaining 100% backward compatibility.
@@ -210,7 +210,7 @@ const engine = createSyncEngine({
 
 #### Custom Storage Provider:
 ```typescript
-import { vault, type IStorageProvider } from '@zod-vault/zustand';
+import { vault, type IStorageProvider } from '@ursalock/zustand';
 
 class AsyncStorageProvider implements IStorageProvider {
   async getItem(key) { /* custom logic */ }
@@ -229,7 +229,7 @@ const useStore = create(
 
 #### Custom HTTP Client:
 ```typescript
-import { createSyncEngine, type IHttpClient } from '@zod-vault/zustand';
+import { createSyncEngine, type IHttpClient } from '@ursalock/zustand';
 
 class RetryHttpClient implements IHttpClient {
   async request(req) {
@@ -244,7 +244,7 @@ const engine = createSyncEngine({
 
 #### Custom Auth Provider:
 ```typescript
-import { type IAuthProvider } from '@zod-vault/client';
+import { type IAuthProvider } from '@ursalock/client';
 
 class BiometricAuth implements IAuthProvider {
   async signUp() { /* fingerprint signup */ }

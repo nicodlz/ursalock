@@ -3,7 +3,7 @@ title: Authentication
 description: Passkey-based authentication with WebAuthn PRF
 ---
 
-zod-vault uses **passkey-only** authentication via WebAuthn. The passkey not only authenticates you but also derives the encryption key for your data.
+ursalock uses **passkey-only** authentication via WebAuthn. The passkey not only authenticates you but also derives the encryption key for your data.
 
 ## How It Works
 
@@ -16,7 +16,7 @@ The server never sees your passkey or encryption key — only the `opaqueId` for
 ## Setup
 
 ```typescript
-import { VaultClient } from "@zod-vault/client";
+import { VaultClient } from "@ursalock/client";
 
 export const vaultClient = new VaultClient({
   serverUrl: "https://vault.example.com",
@@ -30,7 +30,7 @@ export const vaultClient = new VaultClient({
 Register a new user with a passkey.
 
 ```typescript
-import { useSignUp } from "@zod-vault/client";
+import { useSignUp } from "@ursalock/client";
 
 function SignUpButton() {
   const { signUp, isLoading, error } = useSignUp(vaultClient);
@@ -61,7 +61,7 @@ function SignUpButton() {
 Authenticate an existing user.
 
 ```typescript
-import { useSignIn } from "@zod-vault/client";
+import { useSignIn } from "@ursalock/client";
 
 function SignInButton() {
   const { signIn, isLoading, error } = useSignIn(vaultClient);
@@ -87,7 +87,7 @@ function SignInButton() {
 Check if the browser supports WebAuthn.
 
 ```typescript
-import { usePasskeySupport } from "@zod-vault/client";
+import { usePasskeySupport } from "@ursalock/client";
 
 function AuthGate({ children }) {
   const supportsPasskey = usePasskeySupport(vaultClient);
@@ -213,7 +213,7 @@ if (!result.success) {
 
 ```tsx
 import { useState } from "react";
-import { useSignUp, useSignIn, usePasskeySupport, type ZKCredential } from "@zod-vault/client";
+import { useSignUp, useSignIn, usePasskeySupport, type ZKCredential } from "@ursalock/client";
 import { vaultClient } from "../lib/vault-client";
 
 interface AuthProps {

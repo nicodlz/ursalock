@@ -11,16 +11,16 @@ import type { AuthState, ZKAuthResult, AuthResult, User } from "./types.js";
 export interface VaultClientOptions {
   /** Server URL */
   serverUrl: string;
-  /** RP name for passkeys (default: 'zod-vault') */
+  /** RP name for passkeys (default: 'ursalock') */
   rpName?: string;
   /** Prefer passkey over email (default: true) */
   preferPasskey?: boolean;
-  /** Storage key for auth (default: 'zod-vault:auth') */
+  /** Storage key for auth (default: 'ursalock:auth') */
   storageKey?: string;
 }
 
 /**
- * Unified client for zod-vault auth and API
+ * Unified client for ursalock auth and API
  */
 export class VaultClient {
   private options: Required<VaultClientOptions>;
@@ -33,9 +33,9 @@ export class VaultClient {
   constructor(options: VaultClientOptions) {
     this.options = {
       serverUrl: options.serverUrl.replace(/\/$/, ""),
-      rpName: options.rpName ?? "zod-vault",
+      rpName: options.rpName ?? "ursalock",
       preferPasskey: options.preferPasskey ?? true,
-      storageKey: options.storageKey ?? "zod-vault:auth",
+      storageKey: options.storageKey ?? "ursalock:auth",
     };
 
     this.passkeyAuth = new PasskeyAuth({

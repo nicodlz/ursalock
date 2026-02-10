@@ -6,7 +6,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { createStore } from 'zustand/vanilla'
 import { vault } from './vault.js'
 import { createVaultStorage, type VaultStorage } from './storage.js'
-import { generateRecoveryKey } from '@zod-vault/crypto'
+import { generateRecoveryKey } from '@ursalock/crypto'
 
 // Mock storage for tests (localStorage doesn't exist in Node)
 const mockStorageMap = new Map<string, string>()
@@ -41,10 +41,10 @@ describe('createVaultStorage', () => {
     await storage.setItem('test', JSON.stringify({ foo: 'bar' }))
     
     // Should have stored something
-    expect(mockStorageMap.has('zod-vault:test')).toBe(true)
+    expect(mockStorageMap.has('ursalock:test')).toBe(true)
     
     // Stored value should be encrypted (not plain JSON)
-    const stored = mockStorageMap.get('zod-vault:test')!
+    const stored = mockStorageMap.get('ursalock:test')!
     expect(stored).not.toContain('foo')
     expect(stored).not.toContain('bar')
     
@@ -101,7 +101,7 @@ describe('createVaultStorage', () => {
     
     await storage.setItem('test', 'data')
     expect(mockStorageMap.has('custom:test')).toBe(true)
-    expect(mockStorageMap.has('zod-vault:test')).toBe(false)
+    expect(mockStorageMap.has('ursalock:test')).toBe(false)
   })
 
   it('fails to decrypt with wrong recovery key', async () => {
@@ -221,7 +221,7 @@ describe('vault middleware', () => {
     await new Promise((r) => setTimeout(r, 1000))
 
     // Check storage was updated
-    expect(mockStorageMap.has('zod-vault:persist-test')).toBe(true)
+    expect(mockStorageMap.has('ursalock:persist-test')).toBe(true)
   })
 
   it('partializes state when configured', async () => {

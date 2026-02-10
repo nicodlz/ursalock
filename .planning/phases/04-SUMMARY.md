@@ -1,7 +1,7 @@
 # Phase 4 Summary: Backend API
 
 ## Deliverables
-- `@zod-vault/server` package (20.58 KB)
+- `@ursalock/server` package (20.58 KB)
 - Hono API server with SQLite
 - Auth endpoints (email/password)
 - Vault CRUD endpoints
@@ -148,7 +148,7 @@ export const requireAuthMiddleware = createMiddleware<{
 | JWT_SECRET | JWT signing secret | (required) |
 | JWT_EXPIRY | Token expiry (seconds) | 604800 (7 days) |
 | RP_ID | WebAuthn RP ID | localhost |
-| RP_NAME | WebAuthn RP name | zod-vault |
+| RP_NAME | WebAuthn RP name | ursalock |
 | RP_ORIGIN | WebAuthn origin | http://localhost:5173 |
 
 ## Commits

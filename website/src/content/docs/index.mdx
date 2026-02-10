@@ -1,5 +1,5 @@
 ---
-title: zod-vault
+title: ursalock
 description: End-to-end encrypted cloud sync for Zustand stores
 template: splash
 hero:
@@ -12,7 +12,7 @@ hero:
       icon: right-arrow
       variant: primary
     - text: View on GitHub
-      link: https://github.com/nicodlz/zod-vault
+      link: https://github.com/nicodlz/ursalock
       icon: external
 ---
 
@@ -21,10 +21,10 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
 ## Install
 
 ```bash
-npm install @zod-vault/zustand @zod-vault/client @zod-vault/crypto
+npm install @ursalock/zustand @ursalock/client @ursalock/crypto
 ```
 
-## Why zod-vault?
+## Why ursalock?
 
 <CardGrid stagger>
   <Card title="Passkey = Key" icon="lock-closed">
@@ -45,8 +45,8 @@ npm install @zod-vault/zustand @zod-vault/client @zod-vault/crypto
 
 ```typescript
 import { create, type StateCreator } from "zustand";
-import { vault, type VaultOptionsJwk } from "@zod-vault/zustand";
-import type { CipherJWK } from "@zod-vault/crypto";
+import { vault, type VaultOptionsJwk } from "@ursalock/zustand";
+import type { CipherJWK } from "@ursalock/crypto";
 
 interface NotesState {
   notes: string[];
@@ -75,7 +75,7 @@ await store.vault.sync();
 ## Auth Flow
 
 ```typescript
-import { useSignIn } from "@zod-vault/client";
+import { useSignIn } from "@ursalock/client";
 
 const { signIn } = useSignIn(vaultClient);
 
@@ -93,7 +93,7 @@ if (result.success) {
 
 | Package | Description | Size |
 |---------|-------------|------|
-| `@zod-vault/crypto` | Encryption primitives (AES-256-GCM) | ~4 KB |
-| `@zod-vault/zustand` | Zustand middleware | ~6 KB |
-| `@zod-vault/client` | Auth client + React hooks | ~7 KB |
-| `@zod-vault/server` | Self-hosted backend | ~8 KB |
+| `@ursalock/crypto` | Encryption primitives (AES-256-GCM) | ~4 KB |
+| `@ursalock/zustand` | Zustand middleware | ~6 KB |
+| `@ursalock/client` | Auth client + React hooks | ~7 KB |
+| `@ursalock/server` | Self-hosted backend | ~8 KB |

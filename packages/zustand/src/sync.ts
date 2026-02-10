@@ -59,7 +59,7 @@ interface OfflineQueue {
   }>;
 }
 
-const QUEUE_KEY = "zod-vault:offline-queue";
+const QUEUE_KEY = "ursalock:offline-queue";
 
 /**
  * Create a sync engine instance
@@ -283,7 +283,7 @@ export function createSyncEngine(options: SyncOptions) {
       setStatus("synced");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Sync failed";
-      console.error("[zod-vault] Sync error:", message);
+      console.error("[ursalock] Sync error:", message);
       setStatus("error", message);
       
       // Queue for later if push failed
@@ -314,7 +314,7 @@ export function createSyncEngine(options: SyncOptions) {
       setStatus("synced");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Push failed";
-      console.error("[zod-vault] Push error:", message);
+      console.error("[ursalock] Push error:", message);
       
       // Queue for retry
       const local = getLocalData();
@@ -351,7 +351,7 @@ export function createSyncEngine(options: SyncOptions) {
       return false;
     } catch (err) {
       const message = err instanceof Error ? err.message : "Pull failed";
-      console.error("[zod-vault] Pull error:", message);
+      console.error("[ursalock] Pull error:", message);
       setStatus("error", message);
       return false;
     }

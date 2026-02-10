@@ -1,4 +1,4 @@
-# SOLID Principles Audit - zod-vault
+# SOLID Principles Audit - ursalock
 
 ## Executive Summary
 Found **15 SOLID violations** across 7 files. Major issues: God classes, hardcoded dependencies, and mixed concerns.

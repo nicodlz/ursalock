@@ -15,7 +15,7 @@
 import type { StateCreator, StoreApi, StoreMutatorIdentifier } from "zustand";
 import { createVaultStorage, type VaultStorage } from "./storage.js";
 import { createSyncEngine, type SyncEngine, type SyncState } from "./sync.js";
-import type { CipherJWK } from "@zod-vault/crypto";
+import type { CipherJWK } from "@ursalock/crypto";
 
 /** Base vault middleware options */
 interface VaultOptionsBase<S, PersistedState = S> {
@@ -37,7 +37,7 @@ interface VaultOptionsBase<S, PersistedState = S> {
   /** Custom storage implementation */
   storage?: VaultStorage;
   
-  /** Storage key prefix (default: 'zod-vault:') */
+  /** Storage key prefix (default: 'ursalock:') */
   prefix?: string;
   
   /**
@@ -223,7 +223,7 @@ const vaultImpl: VaultImpl = (config, baseOptions) => (set, get, api) => {
           // Also persist to local storage to keep in sync
           void storage.setItem(name, JSON.stringify(partialize({ ...get() })));
         } catch (err) {
-          console.error("[zod-vault] Failed to parse server data:", err);
+          console.error("[ursalock] Failed to parse server data:", err);
         }
       },
       getLocalData: () => {

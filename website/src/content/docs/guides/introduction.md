@@ -1,9 +1,9 @@
 ---
 title: Introduction
-description: What is zod-vault and why use it
+description: What is ursalock and why use it
 ---
 
-zod-vault adds end-to-end encrypted cloud sync to your Zustand stores using **passkey-derived keys**.
+ursalock adds end-to-end encrypted cloud sync to your Zustand stores using **passkey-derived keys**.
 
 ## The Problem
 
@@ -19,7 +19,7 @@ Zustand's `persist()` handles local storage, but:
 
 ## The Solution
 
-zod-vault is a drop-in replacement for `persist()` that adds:
+ursalock is a drop-in replacement for `persist()` that adds:
 
 **Passkey-Based E2EE**
 - Your passkey derives the encryption key via WebAuthn PRF

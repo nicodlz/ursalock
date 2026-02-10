@@ -1,7 +1,7 @@
 {
-  "name": "@zod-vault/crypto",
+  "name": "@ursalock/crypto",
   "version": "0.2.1",
-  "description": "E2EE crypto primitives for zod-vault",
+  "description": "E2EE crypto primitives for ursalock",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -41,13 +41,13 @@
   ],
   "license": "MIT",
   "author": "Nicolas de Luz <ndlz@pm.me>",
-  "homepage": "https://github.com/nicodlz/zod-vault#readme",
+  "homepage": "https://github.com/nicodlz/ursalock#readme",
   "bugs": {
-    "url": "https://github.com/nicodlz/zod-vault/issues"
+    "url": "https://github.com/nicodlz/ursalock/issues"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/nicodlz/zod-vault.git",
+    "url": "https://github.com/nicodlz/ursalock.git",
     "directory": "packages/crypto"
   }
 }

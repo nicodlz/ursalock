@@ -96,7 +96,7 @@ const hasOfflineChanges = usePendingChanges(useStore)
 
 ### Sync Engine (Advanced)
 ```typescript
-import { createSyncEngine } from '@zod-vault/zustand'
+import { createSyncEngine } from '@ursalock/zustand'
 
 const engine = createSyncEngine({
   serverUrl: 'https://api.example.com',

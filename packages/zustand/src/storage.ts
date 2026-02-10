@@ -16,7 +16,7 @@ import {
   encryptWithJwk,
   decryptWithJwk,
   type CipherJWK,
-} from "@zod-vault/crypto";
+} from "@ursalock/crypto";
 import type { IStorageProvider, IVaultStorage } from "./interfaces/storage.js";
 import { LocalStorageProvider } from "./providers/local-storage.js";
 
@@ -91,7 +91,7 @@ function isJwkStoredData(data: StoredData): data is JwkStoredData {
  * Uses dependency injection for storage provider (Dependency Inversion Principle)
  */
 export function createVaultStorage(options: EncryptedStorageOptions): VaultStorage {
-  const prefix = options.prefix ?? "zod-vault:";
+  const prefix = options.prefix ?? "ursalock:";
   
   // Prefer new storageProvider, fall back to legacy storage, finally default to localStorage
   const storageProvider = 
@@ -129,7 +129,7 @@ function createJwkStorage(
         
         return new TextDecoder().decode(decrypted);
       } catch (error) {
-        console.error("[zod-vault] Failed to decrypt stored data:", error);
+        console.error("[ursalock] Failed to decrypt stored data:", error);
         return null;
       }
     },
@@ -150,7 +150,7 @@ function createJwkStorage(
         
         await storage.setItem(prefix + name, JSON.stringify(stored));
       } catch (error) {
-        console.error("[zod-vault] Failed to encrypt data:", error);
+        console.error("[ursalock] Failed to encrypt data:", error);
         throw error;
       }
     },
@@ -200,7 +200,7 @@ function createLegacyStorage(
         
         // Handle JWK mode data (shouldn't happen but just in case)
         if (isJwkStoredData(stored)) {
-          console.error("[zod-vault] Cannot decrypt JWK data with recovery key");
+          console.error("[ursalock] Cannot decrypt JWK data with recovery key");
           return null;
         }
         
@@ -214,7 +214,7 @@ function createLegacyStorage(
         
         return new TextDecoder().decode(decrypted);
       } catch (error) {
-        console.error("[zod-vault] Failed to decrypt stored data:", error);
+        console.error("[ursalock] Failed to decrypt stored data:", error);
         return null;
       }
     },
@@ -238,7 +238,7 @@ function createLegacyStorage(
         
         await storage.setItem(prefix + name, JSON.stringify(stored));
       } catch (error) {
-        console.error("[zod-vault] Failed to encrypt data:", error);
+        console.error("[ursalock] Failed to encrypt data:", error);
         throw error;
       }
     },

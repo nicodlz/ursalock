@@ -38,7 +38,7 @@ export class PasskeyAuth implements IAuthProvider {
   constructor(options: PasskeyAuthOptions) {
     this.options = {
       serverUrl: options.serverUrl.replace(/\/$/, ""),
-      rpName: options.rpName ?? "zod-vault",
+      rpName: options.rpName ?? "ursalock",
       httpClient: options.httpClient ?? new FetchHttpClient(),
     };
     this.httpClient = this.options.httpClient;

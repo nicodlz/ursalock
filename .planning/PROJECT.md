@@ -1,4 +1,4 @@
-# zod-vault
+# ursalock
 
 ## Vision
 
@@ -14,7 +14,7 @@ Drop-in E2EE encrypted cloud sync for existing Zustand stores. Replace `persist(
 
 **Existing solutions require migration.** Evolu needs its own schema DSL. Electric-SQL needs PostgreSQL. 
 
-zod-vault works with your **existing Zod schemas and Zustand stores**. No migration, no lock-in.
+ursalock works with your **existing Zod schemas and Zustand stores**. No migration, no lock-in.
 
 ```typescript
 // Before
@@ -34,7 +34,7 @@ vault(store, { name: 'my-store' })
 
 ## Success Criteria
 
-- [ ] Demeter migrated to zod-vault in <2 hours
+- [ ] Demeter migrated to ursalock in <2 hours
 - [ ] npm install + basic setup in <5 minutes
 - [ ] Backend deployable on Coolify in <10 minutes
 - [ ] All crypto reviewed and tested

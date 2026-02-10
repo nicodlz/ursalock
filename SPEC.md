@@ -1,4 +1,4 @@
-# zod-vault
+# ursalock
 
 > End-to-end encrypted sync for Zod schemas. Drop-in E2EE for any store.
 
@@ -8,7 +8,7 @@
 
 **Le problème :** Tu as une app avec un store (Zustand, Redux, vanilla) et des schemas Zod. Tu veux ajouter du sync cloud sécurisé sans tout réécrire.
 
-**La solution :** `zod-vault` — une lib qui wrap ton store existant et ajoute :
+**La solution :** `ursalock` — une lib qui wrap ton store existant et ajoute :
 - Chiffrement E2EE automatique
 - Sync multi-device
 - Auth par passkey
@@ -69,7 +69,7 @@ const useStore = create<AppState>()(
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
 │  ┌────────────┐   ┌────────────┐   ┌────────────┐   ┌────────────┐ │
-│  │ Your App   │──▶│ zod-vault  │──▶│  Crypto    │──▶│  Sync      │ │
+│  │ Your App   │──▶│ ursalock  │──▶│  Crypto    │──▶│  Sync      │ │
 │  │ Store      │   │  Middleware│   │  Layer     │   │  Client    │ │
 │  └────────────┘   └────────────┘   └────────────┘   └────────────┘ │
 │        │                │                │                │         │
@@ -85,7 +85,7 @@ const useStore = create<AppState>()(
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │                              SERVER                                  │
-│                         @zod-vault/server                           │
+│                         @ursalock/server                           │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
 │  ┌────────────┐   ┌────────────┐   ┌────────────┐                  │
@@ -111,11 +111,11 @@ const useStore = create<AppState>()(
 ## Packages
 
 ```
-@zod-vault/core       # Crypto, types, protocol
-@zod-vault/client     # Middleware store-agnostic + React hooks
-@zod-vault/zustand    # Middleware Zustand
-@zod-vault/server     # Backend Hono
-@zod-vault/cli        # CLI pour self-hosting
+@ursalock/core       # Crypto, types, protocol
+@ursalock/client     # Middleware store-agnostic + React hooks
+@ursalock/zustand    # Middleware Zustand
+@ursalock/server     # Backend Hono
+@ursalock/cli        # CLI pour self-hosting
 ```
 
 ### Dépendances
@@ -136,14 +136,14 @@ const useStore = create<AppState>()(
 ### Installation
 
 ```bash
-npm install @zod-vault/client @zod-vault/zustand
+npm install @ursalock/client @ursalock/zustand
 ```
 
 ### Configuration minimale
 
 ```typescript
 import { create } from 'zustand';
-import { vault } from '@zod-vault/zustand';
+import { vault } from '@ursalock/zustand';
 import { z } from 'zod';
 
 // 1. Ton schema Zod (tu l'as déjà)
@@ -195,7 +195,7 @@ const useStore = create<AppState>()(
 ### Hook d'authentification
 
 ```typescript
-import { useVault } from '@zod-vault/client';
+import { useVault } from '@ursalock/client';
 
 function AuthButton() {
   const { 
@@ -268,7 +268,7 @@ function RecoveryKeyModal() {
 ### Export/Import (compatibilité)
 
 ```typescript
-import { useVault } from '@zod-vault/client';
+import { useVault } from '@ursalock/client';
 
 function DataManagement() {
   const { 
@@ -325,18 +325,18 @@ docker run -d \
   -e DATABASE_URL=postgres://... \
   -e VAULT_RP_ID=vault.example.com \
   -e VAULT_RP_NAME="My App" \
-  ghcr.io/zod-vault/server:latest
+  ghcr.io/ursalock/server:latest
 
 # Option 2: npm
-npm install @zod-vault/server
-npx zod-vault serve --port 3000
+npm install @ursalock/server
+npx ursalock serve --port 3000
 ```
 
 ### Configuration
 
 ```typescript
 // server.ts (si tu veux customiser)
-import { createVaultServer } from '@zod-vault/server';
+import { createVaultServer } from '@ursalock/server';
 
 const app = createVaultServer({
   // Requis
@@ -469,7 +469,7 @@ CREATE INDEX idx_users_recovery ON users(recovery_key_hash);
 ### Constantes
 
 ```typescript
-// @zod-vault/core/crypto.ts
+// @ursalock/core/crypto.ts
 
 export const CRYPTO_CONFIG = {
   // Dérivation de clé
@@ -492,7 +492,7 @@ export const CRYPTO_CONFIG = {
 ### Fonctions
 
 ```typescript
-// @zod-vault/core/crypto.ts
+// @ursalock/core/crypto.ts
 
 /**
  * Génère une clé de récupération lisible par un humain.
@@ -610,7 +610,7 @@ export async function hashRecoveryKeyForLookup(
   recoveryKey: Uint8Array
 ): Promise<string> {
   const prefixed = new Uint8Array([
-    ...new TextEncoder().encode('zod-vault-lookup:'),
+    ...new TextEncoder().encode('ursalock-lookup:'),
     ...recoveryKey,
   ]);
   
@@ -840,7 +840,7 @@ vault(store, {
 ## Types
 
 ```typescript
-// @zod-vault/core/types.ts
+// @ursalock/core/types.ts
 
 import type { z } from 'zod';
 
@@ -967,14 +967,14 @@ export interface ExportOptions {
 }
 
 export interface ClearExport<T> {
-  format: 'zod-vault-clear-v1';
+  format: 'ursalock-clear-v1';
   exportedAt: string;
   schemaVersion: number;
   data: T;
 }
 
 export interface EncryptedExport {
-  format: 'zod-vault-encrypted-v1';
+  format: 'ursalock-encrypted-v1';
   exportedAt: string;
   blob: EncryptedBlobSerialized;
 }
@@ -990,7 +990,7 @@ export type ExportData<T> = ClearExport<T> | EncryptedExport;
 
 ```json
 {
-  "format": "zod-vault-clear-v1",
+  "format": "ursalock-clear-v1",
   "exportedAt": "2026-02-09T14:00:00.000Z",
   "schemaVersion": 1,
   "data": {
@@ -1008,15 +1008,15 @@ export type ExportData<T> = ClearExport<T> | EncryptedExport;
 ```typescript
 vault(store, {
   exportAdapter: {
-    // Convertir du format legacy vers zod-vault
+    // Convertir du format legacy vers ursalock
     fromLegacy: (legacyExport) => ({
-      format: 'zod-vault-clear-v1',
+      format: 'ursalock-clear-v1',
       exportedAt: legacyExport.exportedAt,
       schemaVersion: 1,
       data: legacyExport.data,
     }),
     
-    // Convertir de zod-vault vers format legacy
+    // Convertir de ursalock vers format legacy
     toLegacy: (vaultExport) => ({
       version: 1,
       exportedAt: vaultExport.exportedAt,
@@ -1030,7 +1030,7 @@ vault(store, {
 
 ```json
 {
-  "format": "zod-vault-encrypted-v1",
+  "format": "ursalock-encrypted-v1",
   "exportedAt": "2026-02-09T14:00:00.000Z",
   "blob": {
     "ciphertext": "base64...",
@@ -1128,7 +1128,7 @@ vault(store, {
 
 ## Comparaison avec alternatives
 
-| Feature | zod-vault | Evolu | Zero | Custom |
+| Feature | ursalock | Evolu | Zero | Custom |
 |---------|-----------|-------|------|--------|
 | E2EE natif | ✅ | ✅ | ❌ | ✅ |
 | Zod schemas | ✅ | ❌ (own) | ❌ | ✅ |
@@ -1145,7 +1145,7 @@ vault(store, {
 
 ## Nom alternatifs
 
-- `zod-vault` ✅
+- `ursalock` ✅
 - `zod-sync`
 - `zustand-e2ee`
 - `schema-vault`

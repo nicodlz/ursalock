@@ -1,5 +1,5 @@
 <p align="center">
-  <h1 align="center">zod-vault</h1>
+  <h1 align="center">ursalock</h1>
   <p align="center">
     End-to-end encrypted cloud sync for Zustand stores
     <br/>
@@ -8,18 +8,18 @@
 </p>
 
 <p align="center">
-  <a href="https://zod-vault.ndlz.net"><img src="https://img.shields.io/badge/docs-zod--vault.ndlz.net-blue.svg" alt="Documentation" /></a>
+  <a href="https://ursalock.ndlz.net"><img src="https://img.shields.io/badge/docs-zod--vault.ndlz.net-blue.svg" alt="Documentation" /></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License" /></a>
-  <a href="https://www.npmjs.com/package/@zod-vault/zustand"><img src="https://img.shields.io/npm/v/@zod-vault/zustand.svg" alt="npm" /></a>
-  <a href="https://bundlephobia.com/package/@zod-vault/zustand"><img src="https://img.shields.io/bundlephobia/minzip/@zod-vault/zustand" alt="Bundle Size" /></a>
+  <a href="https://www.npmjs.com/package/@ursalock/zustand"><img src="https://img.shields.io/npm/v/@ursalock/zustand.svg" alt="npm" /></a>
+  <a href="https://bundlephobia.com/package/@ursalock/zustand"><img src="https://img.shields.io/bundlephobia/minzip/@ursalock/zustand" alt="Bundle Size" /></a>
 </p>
 
 <br/>
 
 ```typescript
 import { create, type StateCreator } from "zustand";
-import { vault, type VaultOptionsJwk } from "@zod-vault/zustand";
-import type { CipherJWK } from "@zod-vault/crypto";
+import { vault, type VaultOptionsJwk } from "@ursalock/zustand";
+import type { CipherJWK } from "@ursalock/crypto";
 
 interface NotesState {
   notes: string[];
@@ -45,9 +45,9 @@ function createStore(cipherJwk: CipherJWK) {
 await store.vault.sync();
 ```
 
-## What is zod-vault?
+## What is ursalock?
 
-zod-vault adds encrypted cloud sync to Zustand stores. Your **passkey derives the encryption key** via WebAuthn PRF — no recovery key to manage. Data is encrypted client-side; the server only stores opaque blobs.
+ursalock adds encrypted cloud sync to Zustand stores. Your **passkey derives the encryption key** via WebAuthn PRF — no recovery key to manage. Data is encrypted client-side; the server only stores opaque blobs.
 
 ## Features
 
@@ -61,24 +61,24 @@ zod-vault adds encrypted cloud sync to Zustand stores. Your **passkey derives th
 ## Installation
 
 ```bash
-npm install @zod-vault/zustand @zod-vault/client @zod-vault/crypto
+npm install @ursalock/zustand @ursalock/client @ursalock/crypto
 ```
 
 ## Packages
 
 | Package | Description |
 |---------|-------------|
-| [@zod-vault/crypto](./packages/crypto) | Encryption primitives (AES-256-GCM) |
-| [@zod-vault/zustand](./packages/zustand) | Zustand middleware |
-| [@zod-vault/client](./packages/client) | Auth client + React hooks |
-| [@zod-vault/server](./packages/server) | Self-hosted backend (Hono + SQLite) |
+| [@ursalock/crypto](./packages/crypto) | Encryption primitives (AES-256-GCM) |
+| [@ursalock/zustand](./packages/zustand) | Zustand middleware |
+| [@ursalock/client](./packages/client) | Auth client + React hooks |
+| [@ursalock/server](./packages/server) | Self-hosted backend (Hono + SQLite) |
 
 ## Quick Start
 
 ### 1. Setup auth client
 
 ```typescript
-import { VaultClient } from "@zod-vault/client";
+import { VaultClient } from "@ursalock/client";
 
 export const vaultClient = new VaultClient({
   serverUrl: "https://vault.example.com",
@@ -88,7 +88,7 @@ export const vaultClient = new VaultClient({
 ### 2. Authenticate with passkey
 
 ```tsx
-import { useSignUp, useSignIn, type ZKCredential } from "@zod-vault/client";
+import { useSignUp, useSignIn, type ZKCredential } from "@ursalock/client";
 
 function Auth({ onAuth }: { onAuth: (c: ZKCredential) => void }) {
   const { signUp } = useSignUp(vaultClient);
@@ -111,8 +111,8 @@ function Auth({ onAuth }: { onAuth: (c: ZKCredential) => void }) {
 
 ```typescript
 import { create, type StateCreator } from "zustand";
-import { vault, type VaultOptionsJwk } from "@zod-vault/zustand";
-import type { CipherJWK } from "@zod-vault/crypto";
+import { vault, type VaultOptionsJwk } from "@ursalock/zustand";
+import type { CipherJWK } from "@ursalock/crypto";
 
 interface NotesState {
   notes: string[];
@@ -200,12 +200,12 @@ docker run -d \
   -p 3000:3000 \
   -e JWT_SECRET="your-secret-key" \
   -v vault-data:/app/data \
-  ghcr.io/nicodlz/zod-vault-server
+  ghcr.io/nicodlz/ursalock-server
 ```
 
 ### Coolify / Railway / Fly.io
 
-See [Self-Hosting Guide](https://zod-vault.ndlz.net/guides/self-hosting/)
+See [Self-Hosting Guide](https://ursalock.ndlz.net/guides/self-hosting/)
 
 ## Security
 
@@ -244,7 +244,7 @@ const store = create(vault(storeCreator, {
 
 ## Documentation
 
-Full docs at **[zod-vault.ndlz.net](https://zod-vault.ndlz.net)**
+Full docs at **[ursalock.ndlz.net](https://ursalock.ndlz.net)**
 
 ## License
 

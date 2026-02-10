@@ -1,9 +1,9 @@
 ---
 title: Security Model
-description: How zod-vault keeps your data safe
+description: How ursalock keeps your data safe
 ---
 
-zod-vault uses a zero-knowledge architecture with passkey-derived encryption keys.
+ursalock uses a zero-knowledge architecture with passkey-derived encryption keys.
 
 ## Threat Model
 

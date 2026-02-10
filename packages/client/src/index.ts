@@ -1,6 +1,6 @@
 /**
- * @zod-vault/client
- * Auth and API client for zod-vault
+ * @ursalock/client
+ * Auth and API client for ursalock
  * 
  * Refactored to follow SOLID principles:
  * - IAuthProvider interface for pluggable auth (Open/Closed + Dependency Inversion)

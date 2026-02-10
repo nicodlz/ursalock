@@ -1,5 +1,5 @@
 ---
-title: "@zod-vault/server"
+title: "@ursalock/server"
 description: Server API reference
 ---
 
@@ -8,7 +8,7 @@ Self-hostable backend with Hono and SQLite.
 ## Server Setup
 
 ```typescript
-import { createServer } from "@zod-vault/server";
+import { createServer } from "@ursalock/server";
 
 const server = createServer({
   jwtSecret: process.env.JWT_SECRET,
@@ -23,7 +23,7 @@ server.listen(3000);
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `JWT_SECRET` | Yes | - | Secret for JWT signing |
-| `JWT_ISSUER` | No | `zod-vault` | JWT issuer claim |
+| `JWT_ISSUER` | No | `ursalock` | JWT issuer claim |
 | `JWT_ACCESS_EXPIRY` | No | `15m` | Access token expiry |
 | `JWT_REFRESH_EXPIRY` | No | `7d` | Refresh token expiry |
 | `DB_PATH` | No | `./data/vault.db` | SQLite path |

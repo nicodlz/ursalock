@@ -8,7 +8,7 @@ Requirements: REQ-001, REQ-002, REQ-003, REQ-004
 Estimated: 2h
 
 Deliverables:
-- `@zod-vault/crypto` package with Argon2id + AES-256-GCM
+- `@ursalock/crypto` package with Argon2id + AES-256-GCM
 - Recovery key generation and validation
 - 100% test coverage on crypto functions
 - Zero external deps except hash-wasm
@@ -93,7 +93,7 @@ Deliverables:
 - /examples/react-demo
 - /examples/nextjs-demo
 - Migration guide
-- npm publish @zod-vault/*
+- npm publish @ursalock/*
 
 Dependencies:
 - All previous phases

@@ -1,5 +1,5 @@
 /**
- * @zod-vault/zustand
+ * @ursalock/zustand
  * Encrypted persistence middleware for Zustand
  * 
  * Refactored to follow SOLID principles:

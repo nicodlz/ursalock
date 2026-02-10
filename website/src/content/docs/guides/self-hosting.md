@@ -1,9 +1,9 @@
 ---
 title: Self-Hosting
-description: Deploy your own zod-vault server
+description: Deploy your own ursalock server
 ---
 
-zod-vault server is a single binary with SQLite storage. No external databases required.
+ursalock server is a single binary with SQLite storage. No external databases required.
 
 ## Quick Start
 
@@ -11,11 +11,11 @@ zod-vault server is a single binary with SQLite storage. No external databases r
 
 ```bash
 docker run -d \
-  --name zod-vault \
+  --name ursalock \
   -p 3000:3000 \
   -e JWT_SECRET="$(openssl rand -hex 32)" \
   -v vault-data:/app/data \
-  ghcr.io/nicodlz/zod-vault-server
+  ghcr.io/nicodlz/ursalock-server
 ```
 
 ### Docker Compose
@@ -24,8 +24,8 @@ docker run -d \
 version: "3.8"
 
 services:
-  zod-vault:
-    image: ghcr.io/nicodlz/zod-vault-server
+  ursalock:
+    image: ghcr.io/nicodlz/ursalock-server
     ports:
       - "3000:3000"
     environment:
@@ -43,7 +43,7 @@ volumes:
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `JWT_SECRET` | Yes | - | Secret for signing JWTs (32+ chars) |
-| `JWT_ISSUER` | No | `zod-vault` | JWT issuer claim |
+| `JWT_ISSUER` | No | `ursalock` | JWT issuer claim |
 | `JWT_ACCESS_EXPIRY` | No | `15m` | Access token lifetime |
 | `JWT_REFRESH_EXPIRY` | No | `7d` | Refresh token lifetime |
 | `DB_PATH` | No | `./data/vault.db` | SQLite database path |
@@ -60,7 +60,7 @@ openssl rand -hex 32
 ### Coolify
 
 1. Create new Application → Docker Image
-2. Image: `ghcr.io/nicodlz/zod-vault-server`
+2. Image: `ghcr.io/nicodlz/ursalock-server`
 3. Add environment variable: `JWT_SECRET`
 4. Add persistent storage: `/app/data`
 5. Deploy
@@ -76,7 +76,7 @@ openssl rand -hex 32
 
 ```toml
 # fly.toml
-app = "my-zod-vault"
+app = "my-ursalock"
 
 [build]
   dockerfile = "packages/server/Dockerfile"
@@ -102,20 +102,20 @@ curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt-get install -y nodejs
 
 # Clone and build
-git clone https://github.com/nicodlz/zod-vault.git
-cd zod-vault/packages/server
+git clone https://github.com/nicodlz/ursalock.git
+cd ursalock/packages/server
 npm install && npm run build
 
 # Create systemd service
-sudo tee /etc/systemd/system/zod-vault.service << EOF
+sudo tee /etc/systemd/system/ursalock.service << EOF
 [Unit]
-Description=zod-vault server
+Description=ursalock server
 After=network.target
 
 [Service]
 Type=simple
 User=www-data
-WorkingDirectory=/opt/zod-vault/packages/server
+WorkingDirectory=/opt/ursalock/packages/server
 Environment=JWT_SECRET=your-secret-here
 ExecStart=/usr/bin/node dist/index.js
 Restart=on-failure
@@ -124,7 +124,7 @@ Restart=on-failure
 WantedBy=multi-user.target
 EOF
 
-sudo systemctl enable --now zod-vault
+sudo systemctl enable --now ursalock
 ```
 
 ## Reverse Proxy

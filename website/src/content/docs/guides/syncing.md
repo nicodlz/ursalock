@@ -3,7 +3,7 @@ title: Syncing Data
 description: How sync works, offline support, and conflict resolution
 ---
 
-zod-vault syncs your encrypted data between local storage and the server.
+ursalock syncs your encrypted data between local storage and the server.
 
 ## How Sync Works
 
@@ -73,7 +73,7 @@ const status = useStore.vault.getSyncStatus();
 ### Status Hook
 
 ```tsx
-import { useSyncStatus } from "@zod-vault/zustand";
+import { useSyncStatus } from "@ursalock/zustand";
 
 function SyncIndicator({ store }) {
   const status = useSyncStatus(store);
@@ -118,7 +118,7 @@ function SyncStatus() {
 
 ## Conflict Resolution
 
-zod-vault uses **Last-Write-Wins (LWW)**:
+ursalock uses **Last-Write-Wins (LWW)**:
 
 ```
 Device A: saves { count: 5 } at 10:00:00
@@ -241,7 +241,7 @@ See [Self-Hosting](/guides/self-hosting/) for server setup.
 Enable debug logging:
 
 ```typescript
-localStorage.setItem("zod-vault:debug", "true");
+localStorage.setItem("ursalock:debug", "true");
 ```
 
 Check sync state:

@@ -1,13 +1,13 @@
 # API Reference
 
-## @zod-vault/crypto
+## @ursalock/crypto
 
 ### `generateRecoveryKey()`
 
 Generate a cryptographically secure recovery key.
 
 ```typescript
-import { generateRecoveryKey } from "@zod-vault/crypto";
+import { generateRecoveryKey } from "@ursalock/crypto";
 
 const key = generateRecoveryKey();
 // => "ABCD-EFGH-IJKL-MNOP-QRST-UVWX-YZ23-4567-ABCD-EFGH-IJKL-MNOP-Q"
@@ -18,7 +18,7 @@ const key = generateRecoveryKey();
 Validate a recovery key format.
 
 ```typescript
-import { validateRecoveryKey } from "@zod-vault/crypto";
+import { validateRecoveryKey } from "@ursalock/crypto";
 
 validateRecoveryKey("ABCD-EFGH-..."); // => true
 validateRecoveryKey("invalid");       // => false
@@ -29,7 +29,7 @@ validateRecoveryKey("invalid");       // => false
 Encrypt data with a recovery key.
 
 ```typescript
-import { encrypt } from "@zod-vault/crypto";
+import { encrypt } from "@ursalock/crypto";
 
 const { ciphertext, salt } = await encrypt("secret data", recoveryKey);
 ```
@@ -39,14 +39,14 @@ const { ciphertext, salt } = await encrypt("secret data", recoveryKey);
 Decrypt data with a recovery key.
 
 ```typescript
-import { decrypt } from "@zod-vault/crypto";
+import { decrypt } from "@ursalock/crypto";
 
 const plaintext = await decrypt(ciphertext, salt, recoveryKey);
 ```
 
 ---
 
-## @zod-vault/zustand
+## @ursalock/zustand
 
 ### `vault(initializer, options)`
 
@@ -54,7 +54,7 @@ Middleware that adds encrypted persistence and cloud sync to a Zustand store.
 
 ```typescript
 import { create } from "zustand";
-import { vault } from "@zod-vault/zustand";
+import { vault } from "@ursalock/zustand";
 
 const useStore = create(
   vault(
@@ -102,14 +102,14 @@ useStore.vault.clearStorage()   // Delete all stored data
 
 ---
 
-## @zod-vault/client
+## @ursalock/client
 
 ### `VaultClient`
 
 Main client for authentication and API access.
 
 ```typescript
-import { VaultClient } from "@zod-vault/client";
+import { VaultClient } from "@ursalock/client";
 
 const client = new VaultClient({
   serverUrl: "https://vault.example.com",
@@ -148,7 +148,7 @@ client.subscribe((state) => {
 React hook for auth state.
 
 ```typescript
-import { useVaultAuth } from "@zod-vault/client";
+import { useVaultAuth } from "@ursalock/client";
 
 function Component() {
   const {
@@ -168,7 +168,7 @@ function Component() {
 React hook for sync state.
 
 ```typescript
-import { useVaultSync } from "@zod-vault/client";
+import { useVaultSync } from "@ursalock/client";
 
 function Component() {
   const {
@@ -183,12 +183,12 @@ function Component() {
 
 ---
 
-## @zod-vault/server
+## @ursalock/server
 
 ### Server Setup
 
 ```typescript
-import { createServer } from "@zod-vault/server";
+import { createServer } from "@ursalock/server";
 
 const server = createServer({
   jwtSecret: process.env.JWT_SECRET,
@@ -203,7 +203,7 @@ server.listen(3000);
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `JWT_SECRET` | Yes | - | Secret for signing JWTs |
-| `JWT_ISSUER` | No | `zod-vault` | JWT issuer claim |
+| `JWT_ISSUER` | No | `ursalock` | JWT issuer claim |
 | `JWT_ACCESS_EXPIRY` | No | `15m` | Access token expiry |
 | `JWT_REFRESH_EXPIRY` | No | `7d` | Refresh token expiry |
 | `DB_PATH` | No | `./data/vault.db` | SQLite database path |

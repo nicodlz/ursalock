@@ -1,7 +1,7 @@
 # Phase 3 Summary: Authentication
 
 ## Deliverables
-- `@zod-vault/client` package (20.03 KB)
+- `@ursalock/client` package (20.03 KB)
 - PasskeyAuth - WebAuthn client
 - EmailAuth - Email/password fallback
 - TokenManager - JWT with auto-refresh

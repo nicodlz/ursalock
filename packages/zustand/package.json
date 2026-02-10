@@ -1,5 +1,5 @@
 {
-  "name": "@zod-vault/zustand",
+  "name": "@ursalock/zustand",
   "version": "0.2.8",
   "description": "Encrypted persistence middleware for Zustand with passkey E2EE",
   "type": "module",
@@ -22,7 +22,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@zod-vault/crypto": "^0.2.0"
+    "@ursalock/crypto": "^0.2.0"
   },
   "peerDependencies": {
     "zustand": ">=4.0.0"
@@ -45,13 +45,13 @@
   ],
   "license": "MIT",
   "author": "Nicolas de Luz <ndlz@pm.me>",
-  "homepage": "https://github.com/nicodlz/zod-vault#readme",
+  "homepage": "https://github.com/nicodlz/ursalock#readme",
   "bugs": {
-    "url": "https://github.com/nicodlz/zod-vault/issues"
+    "url": "https://github.com/nicodlz/ursalock/issues"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/nicodlz/zod-vault.git",
+    "url": "https://github.com/nicodlz/ursalock.git",
     "directory": "packages/zustand"
   }
 }

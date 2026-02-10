@@ -37,7 +37,7 @@ export class TokenManager {
 
   constructor(options: TokenManagerOptions = {}) {
     this.options = {
-      storageKey: options.storageKey ?? 'zod-vault:token',
+      storageKey: options.storageKey ?? 'ursalock:token',
       serverUrl: options.serverUrl,
       onExpire: options.onExpire ?? (() => {}),
       refreshBuffer: options.refreshBuffer ?? 5 * 60 * 1000, // 5 minutes

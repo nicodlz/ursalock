@@ -1,17 +1,17 @@
 # Security Model
 
-zod-vault is designed with a zero-knowledge architecture. The server cannot read your data.
+ursalock is designed with a zero-knowledge architecture. The server cannot read your data.
 
 ## Threat Model
 
-### What zod-vault protects against
+### What ursalock protects against
 
 - Server compromise (data is encrypted, server has no keys)
 - Database leaks (only encrypted blobs stored)
 - Man-in-the-middle (HTTPS + client-side encryption)
 - Unauthorized access (JWT auth + user isolation)
 
-### What zod-vault does NOT protect against
+### What ursalock does NOT protect against
 
 - Client-side compromise (malware on user's device)
 - Recovery key theft (if someone has your key, they can decrypt)
@@ -167,7 +167,7 @@ parallelism: 4
 
 ## Audit
 
-The crypto implementation is in `@zod-vault/crypto`:
+The crypto implementation is in `@ursalock/crypto`:
 
 - ~300 lines of TypeScript
 - Uses Web Crypto API (no custom crypto)
@@ -175,7 +175,7 @@ The crypto implementation is in `@zod-vault/crypto`:
 
 You can audit the code:
 ```bash
-git clone https://github.com/nicodlz/zod-vault
+git clone https://github.com/nicodlz/ursalock
 cat packages/crypto/src/*.ts | wc -l  # ~300 lines
 ```
 

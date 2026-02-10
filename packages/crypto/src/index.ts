@@ -1,5 +1,5 @@
 /**
- * @zod-vault/crypto
+ * @ursalock/crypto
  * E2EE crypto primitives: Argon2id key derivation + AES-256-GCM encryption
  * 
  * Refactored to follow SOLID principles:

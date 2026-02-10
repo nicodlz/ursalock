@@ -1,17 +1,17 @@
 # Getting Started
 
-This guide walks you through setting up zod-vault in a React application.
+This guide walks you through setting up ursalock in a React application.
 
 ## Prerequisites
 
 - Node.js 18+
 - A Zustand store you want to encrypt
-- A zod-vault server (see [Self-Hosting](./self-hosting.md)) or use local-only mode
+- A ursalock server (see [Self-Hosting](./self-hosting.md)) or use local-only mode
 
 ## Installation
 
 ```bash
-npm install @zod-vault/zustand @zod-vault/client @zod-vault/crypto
+npm install @ursalock/zustand @ursalock/client @ursalock/crypto
 ```
 
 ## Step 1: Generate a Recovery Key
@@ -19,7 +19,7 @@ npm install @zod-vault/zustand @zod-vault/client @zod-vault/crypto
 The recovery key is the master encryption key for your data. Generate it once and store it safely.
 
 ```typescript
-import { generateRecoveryKey } from "@zod-vault/crypto";
+import { generateRecoveryKey } from "@ursalock/crypto";
 
 const recoveryKey = generateRecoveryKey();
 console.log(recoveryKey);
@@ -32,7 +32,7 @@ Store this key in a password manager or print it as a backup. If you lose it, yo
 
 ```typescript
 // lib/vault.ts
-import { VaultClient } from "@zod-vault/client";
+import { VaultClient } from "@ursalock/client";
 
 export const vaultClient = new VaultClient({
   serverUrl: "https://vault.example.com",
@@ -44,7 +44,7 @@ export const vaultClient = new VaultClient({
 ```typescript
 // stores/notes.ts
 import { create } from "zustand";
-import { vault } from "@zod-vault/zustand";
+import { vault } from "@ursalock/zustand";
 import { vaultClient } from "../lib/vault";
 
 interface NotesState {
@@ -75,7 +75,7 @@ export const useNotes = create(
 
 ```typescript
 // components/AuthGate.tsx
-import { useVaultAuth } from "@zod-vault/client";
+import { useVaultAuth } from "@ursalock/client";
 import { vaultClient } from "../lib/vault";
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
