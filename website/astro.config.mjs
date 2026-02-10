@@ -4,10 +4,10 @@ import starlight from "@astrojs/starlight";
 
 // https://astro.build/config
 export default defineConfig({
-  site: "https://zod-vault.ndlz.net",
+  site: "https://ursalock.ndlz.net",
   integrations: [
     starlight({
-      title: "zod-vault",
+      title: "ursalock",
       description: "End-to-end encrypted cloud sync for Zustand stores",
       logo: {
         light: "./src/assets/logo-light.svg",
@@ -15,12 +15,12 @@ export default defineConfig({
         replacesTitle: true,
       },
       social: [
-        { icon: "github", label: "GitHub", href: "https://github.com/nicodlz/zod-vault" },
+        { icon: "github", label: "GitHub", href: "https://github.com/nicodlz/ursalock" },
       ],
       head: [
         {
           tag: "meta",
-          attrs: { property: "og:image", content: "https://zod-vault.ndlz.net/og.png" },
+          attrs: { property: "og:image", content: "https://ursalock.ndlz.net/og.png" },
         },
       ],
       sidebar: [
@@ -53,7 +53,7 @@ export default defineConfig({
         },
       ],
       editLink: {
-        baseUrl: "https://github.com/nicodlz/zod-vault/edit/master/website/",
+        baseUrl: "https://github.com/nicodlz/ursalock/edit/master/website/",
       },
     }),
   ],
