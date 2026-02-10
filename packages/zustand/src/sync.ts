@@ -1,7 +1,15 @@
 /**
  * Sync engine for vault middleware
  * Handles bidirectional sync with server + offline queue
+ * 
+ * Refactored to follow SOLID principles:
+ * - IHttpClient interface (Dependency Inversion)
+ * - Separated offline queue logic (Single Responsibility)
+ * - Injectable HTTP client for testing
  */
+
+import type { IHttpClient } from "./interfaces/http.js";
+import { FetchHttpClient } from "./providers/fetch-http.js";
 
 export type SyncStatus = "idle" | "syncing" | "synced" | "error" | "offline";
 
@@ -38,6 +46,8 @@ export interface SyncOptions {
   getLocalData: () => { data: string; salt: string; updatedAt: number };
   /** Called on sync status change */
   onStatusChange?: (status: SyncStatus) => void;
+  /** HTTP client for making requests (default: FetchHttpClient) */
+  httpClient?: IHttpClient;
 }
 
 /** Offline queue stored in localStorage */
@@ -53,9 +63,18 @@ const QUEUE_KEY = "zod-vault:offline-queue";
 
 /**
  * Create a sync engine instance
+ * Uses dependency injection for HTTP client (Dependency Inversion Principle)
  */
 export function createSyncEngine(options: SyncOptions) {
-  const { serverUrl, name, getToken, onServerData, getLocalData, onStatusChange } = options;
+  const { 
+    serverUrl, 
+    name, 
+    getToken, 
+    onServerData, 
+    getLocalData, 
+    onStatusChange,
+    httpClient = new FetchHttpClient()
+  } = options;
   
   let status: SyncStatus = "idle";
   let lastSyncAt: number | null = null;
@@ -121,12 +140,15 @@ export function createSyncEngine(options: SyncOptions) {
 
   /**
    * Fetch vault from server
+   * Uses injected HTTP client (Dependency Inversion)
    */
   const fetchServer = async (): Promise<ServerVault | null> => {
     const token = getToken();
     if (!token) return null;
 
-    const res = await fetch(`${serverUrl}/vault/by-name/${encodeURIComponent(name)}`, {
+    const res = await httpClient.request({
+      url: `${serverUrl}/vault/by-name/${encodeURIComponent(name)}`,
+      method: "GET",
       headers: {
         "Authorization": `Bearer ${token}`,
         "Content-Type": "application/json",
@@ -156,7 +178,8 @@ export function createSyncEngine(options: SyncOptions) {
     
     if (existing) {
       // Update existing vault
-      const res = await fetch(`${serverUrl}/vault/${existing.uid}`, {
+      const res = await httpClient.request({
+        url: `${serverUrl}/vault/${existing.uid}`,
         method: "PUT",
         headers: {
           "Authorization": `Bearer ${token}`,
@@ -173,7 +196,8 @@ export function createSyncEngine(options: SyncOptions) {
     }
 
     // Try to create new vault
-    const createRes = await fetch(`${serverUrl}/vault`, {
+    const createRes = await httpClient.request({
+      url: `${serverUrl}/vault`,
       method: "POST",
       headers: {
         "Authorization": `Bearer ${token}`,
@@ -190,7 +214,8 @@ export function createSyncEngine(options: SyncOptions) {
         throw new Error("Vault conflict but not found on retry");
       }
       
-      const retryRes = await fetch(`${serverUrl}/vault/${nowExisting.uid}`, {
+      const retryRes = await httpClient.request({
+        url: `${serverUrl}/vault/${nowExisting.uid}`,
         method: "PUT",
         headers: {
           "Authorization": `Bearer ${token}`,

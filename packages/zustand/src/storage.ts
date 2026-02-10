@@ -1,6 +1,11 @@
 /**
  * Encrypted storage layer for vault middleware
  * Supports both legacy recovery key and new CipherJWK encryption
+ * 
+ * Refactored to follow SOLID principles:
+ * - Uses IStorageProvider interface (Dependency Inversion)
+ * - Separates encryption concerns from storage access (Single Responsibility)
+ * - Injectable storage provider for testing
  */
 
 import {
@@ -12,34 +17,35 @@ import {
   decryptWithJwk,
   type CipherJWK,
 } from "@zod-vault/crypto";
+import type { IStorageProvider, IVaultStorage } from "./interfaces/storage.js";
+import { LocalStorageProvider } from "./providers/local-storage.js";
 
-export interface VaultStorage {
-  /** Get encrypted state from storage */
-  getItem: (name: string) => Promise<string | null>;
-  /** Set encrypted state in storage */
-  setItem: (name: string, value: string) => Promise<void>;
-  /** Remove state from storage */
-  removeItem: (name: string) => Promise<void>;
-}
+// Re-export for backward compatibility
+export interface VaultStorage extends IVaultStorage {}
+export type { IStorageProvider } from "./interfaces/storage.js";
 
 /** Legacy options using recovery key string */
 export interface LegacyEncryptedStorageOptions {
   /** Recovery key for encryption (legacy mode) */
   recoveryKey: string;
-  /** Underlying storage (default: localStorage) */
-  storage?: VaultStorage;
+  /** Underlying storage provider (default: LocalStorageProvider) */
+  storageProvider?: IStorageProvider;
   /** Key prefix in storage */
   prefix?: string;
+  /** @deprecated Use storageProvider instead. For backward compatibility with VaultStorage */
+  storage?: VaultStorage;
 }
 
 /** New options using CipherJWK directly */
 export interface JwkEncryptedStorageOptions {
   /** CipherJWK for encryption (from ZKCredentials) */
   cipherJwk: CipherJWK;
-  /** Underlying storage (default: localStorage) */
-  storage?: VaultStorage;
+  /** Underlying storage provider (default: LocalStorageProvider) */
+  storageProvider?: IStorageProvider;
   /** Key prefix in storage */
   prefix?: string;
+  /** @deprecated Use storageProvider instead. For backward compatibility with VaultStorage */
+  storage?: VaultStorage;
 }
 
 export type EncryptedStorageOptions = LegacyEncryptedStorageOptions | JwkEncryptedStorageOptions;
@@ -81,26 +87,32 @@ function isJwkStoredData(data: StoredData): data is JwkStoredData {
 /**
  * Create an encrypted storage wrapper
  * Supports both legacy recovery key and new CipherJWK modes
+ * 
+ * Uses dependency injection for storage provider (Dependency Inversion Principle)
  */
 export function createVaultStorage(options: EncryptedStorageOptions): VaultStorage {
   const prefix = options.prefix ?? "zod-vault:";
   
-  // Default to localStorage with async wrapper
-  const storage = options.storage ?? createLocalStorageWrapper();
+  // Prefer new storageProvider, fall back to legacy storage, finally default to localStorage
+  const storageProvider = 
+    options.storageProvider ?? 
+    options.storage ?? 
+    new LocalStorageProvider();
 
   if (isJwkMode(options)) {
-    return createJwkStorage(options.cipherJwk, storage, prefix);
+    return createJwkStorage(options.cipherJwk, storageProvider, prefix);
   } else {
-    return createLegacyStorage(options.recoveryKey, storage, prefix);
+    return createLegacyStorage(options.recoveryKey, storageProvider, prefix);
   }
 }
 
 /**
  * Create JWK-based encrypted storage (new mode)
+ * Separates encryption logic from storage access (Single Responsibility)
  */
 function createJwkStorage(
   cipherJwk: CipherJWK,
-  storage: VaultStorage,
+  storage: IStorageProvider,
   prefix: string
 ): VaultStorage {
   return {
@@ -151,10 +163,11 @@ function createJwkStorage(
 
 /**
  * Create legacy recovery-key-based encrypted storage
+ * Separates encryption logic from storage access (Single Responsibility)
  */
 function createLegacyStorage(
   recoveryKey: string,
-  storage: VaultStorage,
+  storage: IStorageProvider,
   prefix: string
 ): VaultStorage {
   // Derive key lazily and cache

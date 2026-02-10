@@ -4,21 +4,35 @@
  * - 256-bit key
  * - 96-bit (12 byte) IV (NIST recommended for GCM)
  * - 128-bit auth tag (included in ciphertext by Web Crypto)
+ * 
+ * Refactored to follow Dependency Inversion Principle:
+ * - Uses ICryptoProvider interface
+ * - Default implementation uses WebCryptoProvider
+ * - Can inject alternative implementations for testing
  */
 
-import { randomBytes, concatBytes } from './utils.js'
+import type { ICryptoProvider, IEncryptedPayload } from './interfaces.js'
+import { WebCryptoProvider } from './providers/web-crypto.js'
 
-/** IV length for AES-GCM (96 bits = 12 bytes, NIST recommended) */
-const IV_LENGTH = 12
+/** Encrypted payload structure (backward compatibility) */
+export interface EncryptedPayload extends IEncryptedPayload {}
 
-/** Encrypted payload structure */
-export interface EncryptedPayload {
-  /** Initialization vector (12 bytes) */
-  iv: Uint8Array
-  /** Ciphertext with auth tag appended */
-  ciphertext: Uint8Array
-  /** Combined iv + ciphertext for storage */
-  combined: Uint8Array
+/** Default crypto provider instance */
+let defaultProvider: ICryptoProvider = new WebCryptoProvider()
+
+/**
+ * Set custom crypto provider (for testing or alternative implementations)
+ * @param provider Custom crypto provider
+ */
+export function setCryptoProvider(provider: ICryptoProvider): void {
+  defaultProvider = provider
+}
+
+/**
+ * Get current crypto provider
+ */
+export function getCryptoProvider(): ICryptoProvider {
+  return defaultProvider
 }
 
 /**
@@ -26,6 +40,7 @@ export interface EncryptedPayload {
  * 
  * @param plaintext - Data to encrypt
  * @param key - 256-bit encryption key
+ * @param provider - Optional crypto provider (uses default if not provided)
  * @returns Encrypted payload with IV
  * 
  * @example
@@ -37,38 +52,10 @@ export interface EncryptedPayload {
  */
 export async function encrypt(
   plaintext: Uint8Array,
-  key: Uint8Array
+  key: Uint8Array,
+  provider: ICryptoProvider = defaultProvider
 ): Promise<EncryptedPayload> {
-  // Validate key length
-  if (key.length !== 32) {
-    throw new Error(`Invalid key length: expected 32 bytes, got ${key.length}`)
-  }
-
-  // Generate random IV
-  const iv = randomBytes(IV_LENGTH)
-
-  // Import key for Web Crypto
-  const cryptoKey = await crypto.subtle.importKey(
-    'raw',
-    key.buffer as ArrayBuffer,
-    { name: 'AES-GCM' },
-    false,
-    ['encrypt']
-  )
-
-  // Encrypt
-  const ciphertext = new Uint8Array(
-    await crypto.subtle.encrypt(
-      { name: 'AES-GCM', iv: iv as Uint8Array<ArrayBuffer> },
-      cryptoKey,
-      plaintext.buffer as ArrayBuffer
-    )
-  )
-
-  // Combine IV + ciphertext for easy storage
-  const combined = concatBytes(iv, ciphertext)
-
-  return { iv, ciphertext, combined }
+  return provider.encrypt(plaintext, key)
 }
 
 /**
@@ -76,6 +63,7 @@ export async function encrypt(
  * 
  * @param encrypted - Combined IV + ciphertext, or separate components
  * @param key - 256-bit encryption key
+ * @param provider - Optional crypto provider (uses default if not provided)
  * @returns Decrypted plaintext
  * 
  * @example
@@ -86,49 +74,10 @@ export async function encrypt(
  */
 export async function decrypt(
   encrypted: Uint8Array | EncryptedPayload,
-  key: Uint8Array
+  key: Uint8Array,
+  provider: ICryptoProvider = defaultProvider
 ): Promise<Uint8Array> {
-  // Validate key length
-  if (key.length !== 32) {
-    throw new Error(`Invalid key length: expected 32 bytes, got ${key.length}`)
-  }
-
-  let iv: Uint8Array
-  let ciphertext: Uint8Array
-
-  if (encrypted instanceof Uint8Array) {
-    // Combined format: first 12 bytes are IV
-    if (encrypted.length < IV_LENGTH + 16) {
-      throw new Error('Invalid encrypted data: too short')
-    }
-    iv = encrypted.slice(0, IV_LENGTH)
-    ciphertext = encrypted.slice(IV_LENGTH)
-  } else {
-    // Separate components
-    iv = encrypted.iv
-    ciphertext = encrypted.ciphertext
-  }
-
-  // Import key for Web Crypto
-  const cryptoKey = await crypto.subtle.importKey(
-    'raw',
-    key.buffer as ArrayBuffer,
-    { name: 'AES-GCM' },
-    false,
-    ['decrypt']
-  )
-
-  // Decrypt
-  try {
-    const plaintext = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: iv as Uint8Array<ArrayBuffer> },
-      cryptoKey,
-      ciphertext.buffer as ArrayBuffer
-    )
-    return new Uint8Array(plaintext)
-  } catch (error) {
-    throw new Error('Decryption failed: invalid key or corrupted data')
-  }
+  return provider.decrypt(encrypted, key)
 }
 
 /**
@@ -136,10 +85,11 @@ export async function decrypt(
  */
 export async function encryptString(
   plaintext: string,
-  key: Uint8Array
+  key: Uint8Array,
+  provider?: ICryptoProvider
 ): Promise<EncryptedPayload> {
   const data = new TextEncoder().encode(plaintext)
-  return encrypt(data, key)
+  return encrypt(data, key, provider)
 }
 
 /**
@@ -147,8 +97,9 @@ export async function encryptString(
  */
 export async function decryptString(
   encrypted: Uint8Array | EncryptedPayload,
-  key: Uint8Array
+  key: Uint8Array,
+  provider?: ICryptoProvider
 ): Promise<string> {
-  const plaintext = await decrypt(encrypted, key)
+  const plaintext = await decrypt(encrypted, key, provider)
   return new TextDecoder().decode(plaintext)
 }
