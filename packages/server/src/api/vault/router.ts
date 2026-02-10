@@ -1,44 +1,25 @@
 /**
  * Vault router - encrypted blob storage CRUD
+ * 
+ * Refactored to follow SOLID principles:
+ * - Uses VaultService for business logic (Single Responsibility)
+ * - Depends on IVaultRepository abstraction (Dependency Inversion)
+ * - Router only handles HTTP concerns (Single Responsibility)
  */
 
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
-import {
-  createVault,
-  getVaultByUid,
-  getVaultByName,
-  getVaultsByUserId,
-  updateVault,
-  deleteVault,
-} from "#db/client.js";
 import { requireAuthMiddleware, type SessionContext } from "#features/auth/middleware.js";
-import { errors, ApiException } from "#errors.js";
 import {
   CreateVaultRequest,
   UpdateVaultRequest,
-  type VaultResponse,
-  type VaultsListResponse,
 } from "#api/schemas.js";
+import { VaultService } from "#services/vault-service.js";
+import { VaultRepository } from "#repositories/vault-repository.js";
 
-/** Transform DB vault to API response */
-function toVaultResponse(vault: {
-  uid: string;
-  name: string;
-  data: string;
-  salt: string;
-  version: number;
-  updatedAt: number;
-}): VaultResponse {
-  return {
-    uid: vault.uid,
-    name: vault.name,
-    data: vault.data,
-    salt: vault.salt,
-    version: vault.version,
-    updatedAt: vault.updatedAt,
-  };
-}
+// Create service with repository (Dependency Injection)
+const vaultRepo = new VaultRepository();
+const vaultService = new VaultService(vaultRepo);
 
 export const vaultRouter = new Hono<{
   Variables: { session: SessionContext };
@@ -51,11 +32,7 @@ export const vaultRouter = new Hono<{
     "/",
     (c) => {
       const session = c.get("session");
-      const vaults = getVaultsByUserId(session.user.id);
-
-      return c.json({
-        vaults: vaults.map(toVaultResponse),
-      } satisfies VaultsListResponse);
+      return c.json(vaultService.listVaults(session.user.id));
     },
   )
 
@@ -65,13 +42,7 @@ export const vaultRouter = new Hono<{
     (c) => {
       const session = c.get("session");
       const { name } = c.req.param();
-
-      const vault = getVaultByName(name, session.user.id);
-      if (!vault) {
-        throw new ApiException(errors.vault_not_found, 404);
-      }
-
-      return c.json(toVaultResponse(vault) satisfies VaultResponse);
+      return c.json(vaultService.getVaultByName(name, session.user.id));
     },
   )
 
@@ -81,13 +52,7 @@ export const vaultRouter = new Hono<{
     (c) => {
       const session = c.get("session");
       const { uid } = c.req.param();
-
-      const vault = getVaultByUid(uid, session.user.id);
-      if (!vault) {
-        throw new ApiException(errors.vault_not_found, 404);
-      }
-
-      return c.json(toVaultResponse(vault) satisfies VaultResponse);
+      return c.json(vaultService.getVaultByUid(uid, session.user.id));
     },
   )
 
@@ -98,21 +63,10 @@ export const vaultRouter = new Hono<{
     (c) => {
       const session = c.get("session");
       const { name, data, salt } = c.req.valid("json");
-
-      // Check if vault with same name exists
-      const existing = getVaultByName(name, session.user.id);
-      if (existing) {
-        throw new ApiException(errors.vault_already_exists(name), 409);
-      }
-
-      const vault = createVault({
-        userId: session.user.id,
-        name,
-        data,
-        salt,
-      });
-
-      return c.json(toVaultResponse(vault) satisfies VaultResponse, 201);
+      return c.json(
+        vaultService.createVault(session.user.id, { name, data, salt }),
+        201
+      );
     },
   )
 
@@ -124,13 +78,9 @@ export const vaultRouter = new Hono<{
       const session = c.get("session");
       const { uid } = c.req.param();
       const { data, salt, version } = c.req.valid("json");
-
-      const vault = updateVault(uid, session.user.id, { data, salt, version });
-      if (!vault) {
-        throw new ApiException(errors.vault_not_found, 404);
-      }
-
-      return c.json(toVaultResponse(vault) satisfies VaultResponse);
+      return c.json(
+        vaultService.updateVault(uid, session.user.id, { data, salt, version })
+      );
     },
   )
 
@@ -140,12 +90,6 @@ export const vaultRouter = new Hono<{
     (c) => {
       const session = c.get("session");
       const { uid } = c.req.param();
-
-      const deleted = deleteVault(uid, session.user.id);
-      if (!deleted) {
-        throw new ApiException(errors.vault_not_found, 404);
-      }
-
-      return c.json({ success: true });
+      return c.json(vaultService.deleteVault(uid, session.user.id));
     },
   );
