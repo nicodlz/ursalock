@@ -1,6 +1,6 @@
 {
   "name": "@zod-vault/crypto",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "E2EE crypto primitives for zod-vault",
   "type": "module",
   "main": "./dist/index.js",

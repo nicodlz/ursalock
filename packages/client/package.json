@@ -1,6 +1,6 @@
 {
   "name": "@zod-vault/client",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Auth and API client for zod-vault with E2EE passkey encryption",
   "type": "module",
   "main": "./dist/index.js",
