@@ -11,7 +11,7 @@ COPY package.json package-lock.json ./
 COPY packages/server/package.json ./packages/server/
 
 # Install dependencies
-RUN npm ci --workspace=@zod-vault/server
+RUN npm ci --workspace=@ursalock/server
 
 # Copy source
 COPY packages/server ./packages/server
