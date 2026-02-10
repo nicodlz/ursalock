@@ -271,7 +271,15 @@ function createLocalStorageWrapper(): VaultStorage {
 
 // Utils
 function bytesToBase64(bytes: Uint8Array): string {
-  return btoa(String.fromCharCode(...bytes));
+  // Process in chunks to avoid "Maximum call stack size exceeded"
+  // String.fromCharCode(...bytes) fails when bytes.length > ~65536
+  const CHUNK_SIZE = 0x8000; // 32KB chunks
+  let result = '';
+  for (let i = 0; i < bytes.length; i += CHUNK_SIZE) {
+    const chunk = bytes.subarray(i, i + CHUNK_SIZE);
+    result += String.fromCharCode.apply(null, chunk as unknown as number[]);
+  }
+  return btoa(result);
 }
 
 function base64ToBytes(base64: string): Uint8Array {
