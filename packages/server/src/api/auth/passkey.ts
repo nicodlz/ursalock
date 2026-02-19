@@ -75,7 +75,8 @@ export const passkeyRouter = new Hono()
     "/register/options",
     zValidator("json", PasskeyRegisterOptionsRequest),
     async (c) => {
-      const { email } = c.req.valid("json");
+      const { email: rawEmail } = c.req.valid("json");
+      const email = rawEmail ? rawEmail.toLowerCase().trim() : undefined;
 
       // Check if email already registered
       if (email) {
@@ -122,7 +123,8 @@ export const passkeyRouter = new Hono()
     "/register/verify",
     zValidator("json", PasskeyRegisterVerifyRequest),
     async (c) => {
-      const { email, credential } = c.req.valid("json");
+      const { email: rawEmail, credential } = c.req.valid("json");
+      const email = rawEmail ? rawEmail.toLowerCase().trim() : undefined;
       const response = credential as RegistrationResponseJSON;
 
       // Decode clientDataJSON to extract challenge
@@ -211,7 +213,8 @@ export const passkeyRouter = new Hono()
     "/login/options",
     zValidator("json", PasskeyLoginOptionsRequest),
     async (c) => {
-      const { email } = c.req.valid("json");
+      const { email: rawEmail } = c.req.valid("json");
+      const email = rawEmail ? rawEmail.toLowerCase().trim() : undefined;
 
       // If email provided, get user's passkeys for allowCredentials
       let allowCredentials: { id: string; transports?: AuthenticatorTransportFuture[] }[] | undefined;
@@ -332,7 +335,8 @@ export const passkeyRouter = new Hono()
     "/check",
     zValidator("json", PasskeyCheckRequest),
     (c) => {
-      const { email } = c.req.valid("json");
+      const { email: rawEmail } = c.req.valid("json");
+      const email = rawEmail.toLowerCase().trim();
       const user = getUserByEmail(email);
       
       if (!user) {

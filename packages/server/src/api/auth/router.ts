@@ -33,7 +33,8 @@ export const authRouter = new Hono<{
     "/email/register",
     zValidator("json", EmailRegisterRequest),
     async (c) => {
-      const { email, password } = c.req.valid("json");
+      const { email: rawEmail, password } = c.req.valid("json");
+      const email = rawEmail.toLowerCase().trim();
 
       // Check if email already exists
       const existing = getUserByEmail(email);
@@ -70,7 +71,8 @@ export const authRouter = new Hono<{
     "/email/login",
     zValidator("json", EmailLoginRequest),
     async (c) => {
-      const { email, password } = c.req.valid("json");
+      const { email: rawEmail, password } = c.req.valid("json");
+      const email = rawEmail.toLowerCase().trim();
 
       const user = getUserByEmail(email);
       if (!user || !user.passwordHash) {

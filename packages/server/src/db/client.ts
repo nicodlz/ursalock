@@ -130,6 +130,7 @@ export function getUserByUid(uid: string): User | undefined {
 
 export function getUserByEmail(email: string): User | undefined {
   const db = getDb();
+  email = email.toLowerCase().trim();
   const stmt = db.prepare(`
     SELECT ${USER_COLUMNS}
     FROM users WHERE email = ?
@@ -340,12 +341,21 @@ export interface UpdateVaultInput {
 
 export function updateVault(uid: string, userId: number, input: UpdateVaultInput): Vault | undefined {
   const db = getDb();
+  if (input.version != null) {
+    // Optimistic locking: only update if version matches
+    const stmt = db.prepare(`
+      UPDATE vaults SET data = ?, salt = ?, version = ? + 1, updated_at = unixepoch()
+      WHERE uid = ? AND user_id = ? AND version = ?
+      RETURNING id, uid, user_id as userId, name, data, salt, version, created_at as createdAt, updated_at as updatedAt
+    `);
+    return stmt.get(input.data, input.salt, input.version, uid, userId, input.version) as Vault | undefined;
+  }
   const stmt = db.prepare(`
-    UPDATE vaults SET data = ?, salt = ?, version = COALESCE(?, version), updated_at = unixepoch()
+    UPDATE vaults SET data = ?, salt = ?, version = version + 1, updated_at = unixepoch()
     WHERE uid = ? AND user_id = ?
     RETURNING id, uid, user_id as userId, name, data, salt, version, created_at as createdAt, updated_at as updatedAt
   `);
-  return stmt.get(input.data, input.salt, input.version ?? null, uid, userId) as Vault | undefined;
+  return stmt.get(input.data, input.salt, uid, userId) as Vault | undefined;
 }
 
 export function deleteVault(uid: string, userId: number): boolean {

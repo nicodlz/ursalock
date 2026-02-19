@@ -51,14 +51,22 @@ const cleanupInterval = setInterval(() => {
 }, SESSION_CLEANUP_INTERVAL);
 
 // Graceful shutdown
+let shuttingDown = false;
 const shutdown = () => {
+  if (shuttingDown) return;
+  shuttingDown = true;
   console.log("\n🛑 Shutting down...");
   clearInterval(cleanupInterval);
-  closeDb();
+  // Stop accepting new connections
   server.close(() => {
     console.log("✅ Server closed");
-    process.exit(0);
   });
+  // Wait for in-flight requests before closing DB
+  setTimeout(() => {
+    closeDb();
+    console.log("✅ Database closed");
+    process.exit(0);
+  }, 2000);
 };
 
 process.on("SIGINT", shutdown);

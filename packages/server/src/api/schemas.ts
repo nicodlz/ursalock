@@ -91,15 +91,15 @@ export type PasskeyLoginVerifyRequest = z.infer<typeof PasskeyLoginVerifyRequest
 /** Create vault request */
 export const CreateVaultRequest = z.object({
   name: z.string().min(1).max(255),
-  data: z.string(), // Encrypted blob (base64)
-  salt: z.string(), // Salt (base64)
+  data: z.string().max(10 * 1024 * 1024), // Encrypted blob (base64), 10MB limit
+  salt: z.string().max(1024), // Salt (base64)
 });
 export type CreateVaultRequest = z.infer<typeof CreateVaultRequest>;
 
 /** Update vault request */
 export const UpdateVaultRequest = z.object({
-  data: z.string(),
-  salt: z.string(),
+  data: z.string().max(10 * 1024 * 1024),
+  salt: z.string().max(1024),
   version: z.number().optional(),
 });
 export type UpdateVaultRequest = z.infer<typeof UpdateVaultRequest>;
