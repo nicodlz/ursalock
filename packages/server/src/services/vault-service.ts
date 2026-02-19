@@ -95,6 +95,16 @@ export class VaultService {
   ): VaultResponse {
     const vault = this.vaultRepo.update(uid, userId, data);
     if (!vault) {
+      // If version was provided, check if vault exists to distinguish 404 vs 409
+      if (data.version != null) {
+        const existing = this.vaultRepo.findByUid(uid, userId);
+        if (existing) {
+          throw new ApiException(
+            { code: "version_conflict", message: "Vault has been modified by another request" },
+            409,
+          );
+        }
+      }
       throw new ApiException(errors.vault_not_found, 404);
     }
     return toVaultResponse(vault);

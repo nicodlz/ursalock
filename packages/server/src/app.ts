@@ -6,11 +6,14 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
+import { bodyLimit } from "hono/body-limit";
+import { secureHeaders } from "hono/secure-headers";
 import type { ErrorHandler } from "hono";
 import { ZodError } from "zod";
 
 import { authRouter } from "#api/auth/router.js";
 import { vaultRouter } from "#api/vault/router.js";
+import { rateLimit } from "#features/auth/rate-limit.js";
 import { ApiException, errors, type ApiError } from "#errors.js";
 import { env } from "#env.js";
 
@@ -58,6 +61,8 @@ export function createApp() {
   const app = new Hono();
 
   // Middleware
+  app.use("*", bodyLimit({ maxSize: 11 * 1024 * 1024 }));
+  app.use("*", secureHeaders());
   if (env.NODE_ENV !== "production") {
     app.use("*", logger());
   }
@@ -73,6 +78,9 @@ export function createApp() {
 
   // Health check
   app.get("/health", (c) => c.json({ status: "ok", timestamp: Date.now() }));
+
+  // Rate limit auth endpoints
+  app.use("/auth/*", rateLimit({ max: 10, windowMs: 60000 }));
 
   // API routes
   app.route("/auth", authRouter);
