@@ -11,6 +11,7 @@ import { ZodError } from "zod";
 
 import { authRouter } from "#api/auth/router.js";
 import { vaultRouter } from "#api/vault/router.js";
+import { rateLimit } from "#features/auth/rate-limit.js";
 import { ApiException, errors, type ApiError } from "#errors.js";
 import { env } from "#env.js";
 
@@ -73,6 +74,11 @@ export function createApp() {
 
   // Health check
   app.get("/health", (c) => c.json({ status: "ok", timestamp: Date.now() }));
+
+  // Rate limit auth endpoints (skip in test to avoid flaky tests)
+  if (env.NODE_ENV !== "test") {
+    app.use("/auth/*", rateLimit({ max: 10, windowMs: 60000 }));
+  }
 
   // API routes
   app.route("/auth", authRouter);

@@ -311,6 +311,46 @@ describe("Vault CRUD", () => {
     });
   });
 
+  describe("Auth isolation", () => {
+    let tokenA: string;
+    let tokenB: string;
+    let vaultUidA: string;
+
+    beforeEach(async () => {
+      const resA = await client.auth.email.register.$post({
+        json: { email: "userA@example.com", password: "password123" },
+      });
+      tokenA = (await resA.json()).token;
+
+      const resB = await client.auth.email.register.$post({
+        json: { email: "userB@example.com", password: "password123" },
+      });
+      tokenB = (await resB.json()).token;
+
+      const createRes = await app.request("/vault", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${tokenA}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "a-secret", data: "secret-data", salt: "salt" }),
+      });
+      vaultUidA = (await createRes.json()).uid;
+    });
+
+    it("user B cannot GET user A's vault", async () => {
+      const res = await app.request(`/vault/${vaultUidA}`, {
+        headers: { Authorization: `Bearer ${tokenB}` },
+      });
+      expect(res.status).toBe(404);
+    });
+
+    it("user B cannot DELETE user A's vault", async () => {
+      const res = await app.request(`/vault/${vaultUidA}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${tokenB}` },
+      });
+      expect(res.status).toBe(404);
+    });
+  });
+
   describe("DELETE /vault/:uid", () => {
     it("deletes vault", async () => {
       // Create vault

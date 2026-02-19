@@ -34,18 +34,75 @@ import { env } from "#env.js";
 // Legacy passkey routes kept for backward compatibility
 import { getRpConfigFromRequest } from "#features/auth/origin.js";
 
-// In-memory challenge store (should use Redis in production)
-const challengeStore = new Map<string, { challenge: string; email?: string; userId?: number; expiresAt: number }>();
+// Challenge store entry type
+export interface ChallengeEntry {
+  challenge: string;
+  email?: string;
+  userId?: number;
+  expiresAt: number;
+}
 
-// Cleanup expired challenges periodically
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, value] of challengeStore) {
-    if (value.expiresAt < now) {
-      challengeStore.delete(key);
+/**
+ * In-memory challenge store with configurable TTL, max size, and automatic cleanup.
+ * Can be replaced/mocked in tests.
+ */
+export class ChallengeStore {
+  private store = new Map<string, ChallengeEntry>();
+  private cleanupTimer: ReturnType<typeof setInterval> | null = null;
+
+  constructor(
+    private readonly options: {
+      maxSize?: number;
+      cleanupIntervalMs?: number;
+    } = {},
+  ) {
+    const interval = options.cleanupIntervalMs ?? 60000;
+    this.cleanupTimer = setInterval(() => this.cleanup(), interval);
+    if (this.cleanupTimer && typeof this.cleanupTimer === "object" && "unref" in this.cleanupTimer) {
+      (this.cleanupTimer as NodeJS.Timeout).unref();
     }
   }
-}, 60000);
+
+  get(key: string): ChallengeEntry | undefined {
+    return this.store.get(key);
+  }
+
+  set(key: string, entry: ChallengeEntry): void {
+    const maxSize = this.options.maxSize ?? 10000;
+    if (this.store.size >= maxSize && !this.store.has(key)) {
+      const oldest = this.store.keys().next().value;
+      if (oldest !== undefined) this.store.delete(oldest);
+    }
+    this.store.set(key, entry);
+  }
+
+  delete(key: string): boolean {
+    return this.store.delete(key);
+  }
+
+  get size(): number {
+    return this.store.size;
+  }
+
+  cleanup(): void {
+    const now = Date.now();
+    for (const [key, value] of this.store) {
+      if (value.expiresAt < now) {
+        this.store.delete(key);
+      }
+    }
+  }
+
+  destroy(): void {
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+      this.cleanupTimer = null;
+    }
+    this.store.clear();
+  }
+}
+
+const challengeStore = new ChallengeStore();
 
 // Schemas
 const PasskeyRegisterOptionsRequest = z.object({
