@@ -62,7 +62,15 @@ export class VaultClient {
     };
 
     // Check existing auth
-    this.initialize();
+    this.initialize().catch((err) => {
+      this.updateState({
+        isAuthenticated: false,
+        user: null,
+        isLoading: false,
+        error: err instanceof Error ? err : new Error(String(err)),
+        credential: null,
+      });
+    });
   }
 
   // ==================

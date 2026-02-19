@@ -26,7 +26,7 @@ import type { AuthState, ZKAuthResult, ZKCredential } from "./types.js";
 export function useAuth(client: VaultClient): AuthState {
   const subscribe = useCallback(
     (callback: () => void) => {
-      return client.subscribe(callback);
+      return client.subscribe(() => callback());
     },
     [client]
   );
