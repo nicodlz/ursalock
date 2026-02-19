@@ -55,12 +55,14 @@ export const zkcRouter = new Hono()
       }
 
       // Create user with opaque ID (no email, no password)
+      // Note: createUser + createSession can't be in a single better-sqlite3 transaction
+      // because createToken (JWT signing) is async and must happen between them.
       const user = createUser({
         opaqueId,
         displayName,
       });
 
-      // Create session
+      // Create session (async token generation prevents wrapping in single transaction)
       const token = await createToken({ userId: user.uid });
       const tokenHash = hashToken(token);
       const expiresAt = Math.floor(Date.now() / 1000) + env.JWT_EXPIRY;

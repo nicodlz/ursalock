@@ -64,7 +64,7 @@ export function createApp() {
   app.use(
     "*",
     cors({
-      origin: env.RP_ORIGINS,
+      origin: env.RP_ORIGINS.split(",").map(s => s.trim()),
       allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
       allowHeaders: ["Content-Type", "Authorization"],
       exposeHeaders: ["X-Request-Id"],

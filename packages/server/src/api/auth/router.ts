@@ -41,13 +41,14 @@ export const authRouter = new Hono<{
         throw new ApiException(errors.email_already_exists, 409);
       }
 
-      // Hash password with bcrypt
+      // Hash password before transaction (avoid holding transaction during async work)
       const passwordHash = await bcrypt.hash(password, 12);
 
-      // Create user
+      // Pre-generate token material (async work done before transaction)
+      // We create user in transaction, but need uid for JWT — so we do a two-phase approach:
+      // Phase 1: create user to get uid
+      // Phase 2: generate token + create session atomically
       const user = createUser({ email, passwordHash });
-
-      // Create session
       const token = await createToken({ userId: user.uid, email });
       const tokenHash = hashToken(token);
       const expiresAt = Math.floor(Date.now() / 1000) + env.JWT_EXPIRY;
