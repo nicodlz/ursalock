@@ -84,12 +84,6 @@ export const PasskeyLoginVerifyRequest = z.object({
 });
 export type PasskeyLoginVerifyRequest = z.infer<typeof PasskeyLoginVerifyRequest>;
 
-/** Passkey check response */
-export const PasskeyCheckResponse = z.object({
-  hasPasskey: z.boolean(),
-});
-export type PasskeyCheckResponse = z.infer<typeof PasskeyCheckResponse>;
-
 // ===================
 // Vault schemas
 // ===================

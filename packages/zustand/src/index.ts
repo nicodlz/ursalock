@@ -38,4 +38,4 @@ export { FetchHttpClient } from "./providers/fetch-http.js";
 export { type SyncStatus, type SyncState, createSyncEngine, type SyncEngine } from "./sync.js";
 
 // React hooks
-export { useSyncStatus } from "./hooks.js";
+export { useSyncStatus, useHydrated, usePendingChanges } from "./hooks.js";

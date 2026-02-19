@@ -6,7 +6,7 @@
 import { PasskeyAuth, type ZKCredential } from "./passkey.js";
 import { EmailAuth } from "./email.js";
 import { TokenManager, type Token } from "./token.js";
-import type { AuthState, ZKAuthResult, AuthResult, User } from "./types.js";
+import type { AuthState, ZKAuthResult, User } from "./types.js";
 
 export interface VaultClientOptions {
   /** Server URL */

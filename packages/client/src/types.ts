@@ -63,15 +63,8 @@ export interface AuthResult {
   error?: string;
 }
 
-/** Result of ZK auth operations (passkey with PRF) */
-export interface ZKAuthResult {
-  success: boolean;
-  user?: User;
-  token?: string;
-  /** ZK Credential with derived encryption keys */
-  credential?: ZKCredential;
-  error?: string;
-}
+// ZKAuthResult is defined in interfaces/auth-provider.ts, re-exported here for convenience
+export type { ZKAuthResult } from "./interfaces/auth-provider.js";
 
 /** API error response */
 export interface ApiError {

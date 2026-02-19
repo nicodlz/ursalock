@@ -56,12 +56,3 @@ export interface IKeyDerivationProvider {
     }
   ): Promise<{ key: Uint8Array; salt: Uint8Array }>;
 }
-
-/** Random number generator interface */
-export interface IRandomProvider {
-  /**
-   * Generate cryptographically secure random bytes
-   * @param length Number of bytes to generate
-   */
-  randomBytes(length: number): Uint8Array;
-}
