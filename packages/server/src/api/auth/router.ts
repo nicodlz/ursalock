@@ -2,9 +2,9 @@
  * Auth router - email/password + passkey authentication
  */
 
-import { createHash, randomBytes } from "node:crypto";
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
+import bcrypt from "bcryptjs";
 import {
   createUser,
   getUserByEmail,
@@ -25,19 +25,6 @@ import {
 import { passkeyRouter } from "./passkey.js";
 import { zkcRouter } from "./zkc.js";
 
-/**
- * Hash password using PBKDF2
- * Note: Client uses Argon2id for encryption; server uses simpler hash for auth
- */
-function hashPassword(password: string, salt: string): string {
-  const crypto = createHash("sha256");
-  return crypto.update(password + salt).digest("hex");
-}
-
-function generateSalt(): string {
-  return randomBytes(16).toString("hex");
-}
-
 export const authRouter = new Hono<{
   Variables: { session: SessionContext };
 }>()
@@ -54,9 +41,8 @@ export const authRouter = new Hono<{
         throw new ApiException(errors.email_already_exists, 409);
       }
 
-      // Hash password
-      const salt = generateSalt();
-      const passwordHash = hashPassword(password, salt) + ":" + salt;
+      // Hash password with bcrypt
+      const passwordHash = await bcrypt.hash(password, 12);
 
       // Create user
       const user = createUser({ email, passwordHash });
@@ -90,14 +76,9 @@ export const authRouter = new Hono<{
         throw new ApiException(errors.invalid_credentials, 401);
       }
 
-      // Verify password
-      const [storedHash, salt] = user.passwordHash.split(":");
-      if (!salt) {
-        throw new ApiException(errors.invalid_credentials, 401);
-      }
-      
-      const inputHash = hashPassword(password, salt);
-      if (inputHash !== storedHash) {
+      // Verify password with bcrypt
+      const valid = await bcrypt.compare(password, user.passwordHash);
+      if (!valid) {
         throw new ApiException(errors.invalid_credentials, 401);
       }
 

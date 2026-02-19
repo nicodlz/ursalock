@@ -15,6 +15,9 @@ export interface AuthTokenPayload extends JWTPayload {
 
 /** Encode secret as Uint8Array for jose */
 function getSecretKey(): Uint8Array {
+  if (!env.JWT_SECRET) {
+    throw new Error("JWT_SECRET is not set. Refusing to sign/verify tokens with an empty secret.");
+  }
   return new TextEncoder().encode(env.JWT_SECRET);
 }
 
