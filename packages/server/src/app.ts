@@ -83,8 +83,9 @@ export function createApp() {
 
   // 404 handler
   app.notFound((c) => {
+    const requestId = c.req.header("x-request-id") ?? crypto.randomUUID();
     return c.json(
-      { error: { code: "not_found", message: "Endpoint not found" } },
+      { error: { code: "not_found", message: "Endpoint not found" }, requestId },
       404,
     );
   });

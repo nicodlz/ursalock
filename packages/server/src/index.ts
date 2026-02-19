@@ -21,3 +21,6 @@ export type { ApiError, ErrorCode } from "#errors.js";
 
 // Schemas (for client type generation)
 export * from "#api/schemas.js";
+
+// Typed client support — use with hc<AppType>(url)
+export type AppType = ReturnType<typeof createApp>;
