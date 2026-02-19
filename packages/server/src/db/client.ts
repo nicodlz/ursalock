@@ -61,6 +61,31 @@ export function closeDb(): void {
 // User queries
 // ===================
 
+/** Reusable SELECT columns for user queries (DRY) */
+const USER_COLUMNS = `id, uid, email, password_hash as passwordHash,
+           opaque_id as opaqueId, display_name as displayName,
+           created_at as createdAt, updated_at as updatedAt`;
+
+/** Reusable SELECT columns for user fields in JOIN queries */
+const USER_JOIN_COLUMNS = `u.id as "user.id", u.uid as "user.uid", u.email as "user.email",
+      u.password_hash as "user.passwordHash", u.opaque_id as "user.opaqueId",
+      u.display_name as "user.displayName", u.created_at as "user.createdAt",
+      u.updated_at as "user.updatedAt"`;
+
+/** Map a JOIN row's user.* fields to a User object */
+function userFromRow(row: Record<string, unknown>): User {
+  return {
+    id: row["user.id"] as number,
+    uid: row["user.uid"] as string,
+    email: (row["user.email"] as string | null) ?? null,
+    passwordHash: (row["user.passwordHash"] as string | null) ?? null,
+    opaqueId: (row["user.opaqueId"] as string | null) ?? null,
+    displayName: (row["user.displayName"] as string | null) ?? null,
+    createdAt: row["user.createdAt"] as number,
+    updatedAt: row["user.updatedAt"] as number,
+  };
+}
+
 export interface CreateUserInput {
   email?: string;
   passwordHash?: string;
@@ -75,9 +100,7 @@ export function createUser(input: CreateUserInput): User {
   const stmt = db.prepare(`
     INSERT INTO users (email, password_hash, opaque_id, display_name)
     VALUES (?, ?, ?, ?)
-    RETURNING id, uid, email, password_hash as passwordHash, 
-              opaque_id as opaqueId, display_name as displayName,
-              created_at as createdAt, updated_at as updatedAt
+    RETURNING ${USER_COLUMNS}
   `);
   return stmt.get(
     input.email ?? null,
@@ -90,9 +113,7 @@ export function createUser(input: CreateUserInput): User {
 export function getUserById(id: number): User | undefined {
   const db = getDb();
   const stmt = db.prepare(`
-    SELECT id, uid, email, password_hash as passwordHash,
-           opaque_id as opaqueId, display_name as displayName,
-           created_at as createdAt, updated_at as updatedAt
+    SELECT ${USER_COLUMNS}
     FROM users WHERE id = ?
   `);
   return stmt.get(id) as User | undefined;
@@ -101,9 +122,7 @@ export function getUserById(id: number): User | undefined {
 export function getUserByUid(uid: string): User | undefined {
   const db = getDb();
   const stmt = db.prepare(`
-    SELECT id, uid, email, password_hash as passwordHash,
-           opaque_id as opaqueId, display_name as displayName,
-           created_at as createdAt, updated_at as updatedAt
+    SELECT ${USER_COLUMNS}
     FROM users WHERE uid = ?
   `);
   return stmt.get(uid) as User | undefined;
@@ -112,9 +131,7 @@ export function getUserByUid(uid: string): User | undefined {
 export function getUserByEmail(email: string): User | undefined {
   const db = getDb();
   const stmt = db.prepare(`
-    SELECT id, uid, email, password_hash as passwordHash,
-           opaque_id as opaqueId, display_name as displayName,
-           created_at as createdAt, updated_at as updatedAt
+    SELECT ${USER_COLUMNS}
     FROM users WHERE email = ?
   `);
   return stmt.get(email) as User | undefined;
@@ -126,9 +143,7 @@ export function getUserByEmail(email: string): User | undefined {
 export function getUserByOpaqueId(opaqueId: string): User | undefined {
   const db = getDb();
   const stmt = db.prepare(`
-    SELECT id, uid, email, password_hash as passwordHash,
-           opaque_id as opaqueId, display_name as displayName,
-           created_at as createdAt, updated_at as updatedAt
+    SELECT ${USER_COLUMNS}
     FROM users WHERE opaque_id = ?
   `);
   return stmt.get(opaqueId) as User | undefined;
@@ -174,7 +189,7 @@ export function getPasskeyByCredentialId(credentialId: string): (Passkey & { use
     SELECT 
       p.id, p.user_id as userId, p.credential_id as credentialId, p.public_key as publicKey,
       p.counter, p.device_type as deviceType, p.backed_up as backedUp, p.transports, p.created_at as createdAt,
-      u.id as "user.id", u.uid as "user.uid", u.email as "user.email"
+      ${USER_JOIN_COLUMNS}
     FROM passkeys p
     JOIN users u ON p.user_id = u.id
     WHERE p.credential_id = ?
@@ -192,16 +207,7 @@ export function getPasskeyByCredentialId(credentialId: string): (Passkey & { use
     backedUp: Boolean(row["backedUp"]),
     transports: row["transports"] as string | null,
     createdAt: row["createdAt"] as number,
-    user: {
-      id: row["user.id"] as number,
-      uid: row["user.uid"] as string,
-      email: row["user.email"] as string | null,
-      passwordHash: null,
-      opaqueId: null,
-      displayName: null,
-      createdAt: 0,
-      updatedAt: 0,
-    },
+    user: userFromRow(row),
   };
 }
 
@@ -246,7 +252,7 @@ export function getSessionByTokenHash(tokenHash: string): (Session & { user: Use
   const stmt = db.prepare(`
     SELECT 
       s.id, s.user_id as userId, s.token_hash as tokenHash, s.expires_at as expiresAt, s.created_at as createdAt,
-      u.id as "user.id", u.uid as "user.uid", u.email as "user.email"
+      ${USER_JOIN_COLUMNS}
     FROM sessions s
     JOIN users u ON s.user_id = u.id
     WHERE s.token_hash = ? AND s.expires_at > unixepoch()
@@ -260,16 +266,7 @@ export function getSessionByTokenHash(tokenHash: string): (Session & { user: Use
     tokenHash: row["tokenHash"] as string,
     expiresAt: row["expiresAt"] as number,
     createdAt: row["createdAt"] as number,
-    user: {
-      id: row["user.id"] as number,
-      uid: row["user.uid"] as string,
-      email: row["user.email"] as string | null,
-      passwordHash: null,
-      opaqueId: null,
-      displayName: null,
-      createdAt: 0,
-      updatedAt: 0,
-    },
+    user: userFromRow(row),
   };
 }
 

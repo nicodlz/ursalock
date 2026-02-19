@@ -329,7 +329,7 @@ const vaultImpl: VaultImpl = (config, baseOptions) => (set, get, api) => {
     } else {
       savedSetState(state);
     }
-    void persistState();
+    void persistState().catch((err) => console.error("[ursalock] Failed to persist state:", err));
   }) as SetState;
 
   // Create store with wrapped set
@@ -340,7 +340,7 @@ const vaultImpl: VaultImpl = (config, baseOptions) => (set, get, api) => {
       } else {
         set(partial);
       }
-      void persistState();
+      void persistState().catch((err) => console.error("[ursalock] Failed to persist state:", err));
     }) as typeof set,
     get,
     api,

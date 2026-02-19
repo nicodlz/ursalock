@@ -150,7 +150,10 @@ export function createSyncEngine(options: SyncOptions) {
    */
   const fetchServer = async (): Promise<ServerVault | null> => {
     const token = getToken();
-    if (!token) return null;
+    if (!token) {
+      console.warn("[ursalock] fetchServer: no auth token available, skipping");
+      return null;
+    }
 
     const res = await httpClient.request({
       url: `${serverUrl}/vault/by-name/${encodeURIComponent(name)}`,

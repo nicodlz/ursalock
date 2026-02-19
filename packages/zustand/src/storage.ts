@@ -13,6 +13,7 @@ import {
   decrypt,
   deriveKey,
   recoveryKeyToBytes,
+  validateRecoveryKey,
   encryptWithJwk,
   decryptWithJwk,
   constantTimeEqual,
@@ -171,6 +172,11 @@ function createLegacyStorage(
   storage: IStorageProvider,
   prefix: string
 ): VaultStorage {
+  // Validate recovery key format upfront instead of failing at first persist
+  if (!validateRecoveryKey(recoveryKey)) {
+    throw new Error("[ursalock] Invalid recovery key format");
+  }
+
   // Derive key lazily and cache
   let cachedKey: Uint8Array | null = null;
   let cachedSalt: Uint8Array | null = null;

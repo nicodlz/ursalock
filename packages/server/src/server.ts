@@ -5,7 +5,7 @@
 import { serve } from "@hono/node-server";
 import { createApp } from "#app.js";
 import { env } from "#env.js";
-import { closeDb } from "#db/client.js";
+import { closeDb, deleteExpiredSessions } from "#db/client.js";
 
 const app = createApp();
 
@@ -37,9 +37,23 @@ const server = serve(
   },
 );
 
+// Clean up expired sessions every hour
+const SESSION_CLEANUP_INTERVAL = 60 * 60 * 1000; // 1 hour
+const cleanupInterval = setInterval(() => {
+  try {
+    const deleted = deleteExpiredSessions();
+    if (deleted > 0) {
+      console.log(`🧹 Cleaned up ${deleted} expired session(s)`);
+    }
+  } catch (err) {
+    console.error("Failed to clean expired sessions:", err);
+  }
+}, SESSION_CLEANUP_INTERVAL);
+
 // Graceful shutdown
 const shutdown = () => {
   console.log("\n🛑 Shutting down...");
+  clearInterval(cleanupInterval);
   closeDb();
   server.close(() => {
     console.log("✅ Server closed");
