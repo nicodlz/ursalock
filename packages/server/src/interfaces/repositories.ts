@@ -15,16 +15,6 @@ export interface VaultEntity {
   updatedAt: number;
 }
 
-/** User entity from database */
-export interface UserEntity {
-  id: number;
-  email?: string;
-  opaqueId?: string;
-  displayName?: string;
-  createdAt: number;
-  updatedAt: number;
-}
-
 /**
  * Vault repository interface
  * Abstracts database operations for vaults
@@ -72,44 +62,4 @@ export interface IVaultRepository {
    * Delete a vault
    */
   delete(uid: string, userId: number): boolean;
-}
-
-/**
- * User repository interface
- * Abstracts database operations for users
- */
-export interface IUserRepository {
-  /**
-   * Create a new user
-   */
-  create(user: {
-    email?: string;
-    opaqueId?: string;
-    displayName?: string;
-  }): UserEntity;
-
-  /**
-   * Find user by ID
-   */
-  findById(id: number): UserEntity | undefined;
-
-  /**
-   * Find user by email
-   */
-  findByEmail(email: string): UserEntity | undefined;
-
-  /**
-   * Find user by opaque ID (passkey)
-   */
-  findByOpaqueId(opaqueId: string): UserEntity | undefined;
-
-  /**
-   * Update user
-   */
-  update(id: number, data: Partial<UserEntity>): UserEntity | undefined;
-
-  /**
-   * Delete user
-   */
-  delete(id: number): boolean;
 }

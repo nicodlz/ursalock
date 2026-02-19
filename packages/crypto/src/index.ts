@@ -12,7 +12,6 @@
 export type {
   ICryptoProvider,
   IKeyDerivationProvider,
-  IRandomProvider,
   IEncryptedPayload,
 } from "./interfaces.js";
 
@@ -20,7 +19,7 @@ export type {
 export { WebCryptoProvider } from "./providers/web-crypto.js";
 
 // Legacy recovery key based encryption (for backward compatibility)
-export { deriveKey, type DeriveKeyOptions } from "./derive.js";
+export { deriveKey, DEFAULT_ARGON2_PARAMS, type DeriveKeyOptions, type DerivedKey } from "./derive.js";
 export {
   encrypt,
   decrypt,
@@ -35,6 +34,7 @@ export {
   validateRecoveryKey,
   recoveryKeyToBytes,
   bytesToRecoveryKey,
+  formatRecoveryKey,
   type RecoveryKey,
 } from "./recovery.js";
 export { randomBytes, constantTimeEqual } from "./utils.js";

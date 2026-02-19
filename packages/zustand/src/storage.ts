@@ -250,26 +250,6 @@ function createLegacyStorage(
   };
 }
 
-/**
- * Create async wrapper around localStorage
- */
-function createLocalStorageWrapper(): VaultStorage {
-  return {
-    async getItem(name: string): Promise<string | null> {
-      if (typeof window === "undefined") return null;
-      return localStorage.getItem(name);
-    },
-    async setItem(name: string, value: string): Promise<void> {
-      if (typeof window === "undefined") return;
-      localStorage.setItem(name, value);
-    },
-    async removeItem(name: string): Promise<void> {
-      if (typeof window === "undefined") return;
-      localStorage.removeItem(name);
-    },
-  };
-}
-
 // Utils
 function bytesToBase64(bytes: Uint8Array): string {
   // Process in chunks to avoid "Maximum call stack size exceeded"

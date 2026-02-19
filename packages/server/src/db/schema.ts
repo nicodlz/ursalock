@@ -118,13 +118,3 @@ CREATE INDEX IF NOT EXISTS idx_vaults_uid ON vaults(uid);
 CREATE INDEX IF NOT EXISTS idx_vaults_user_id ON vaults(user_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_vaults_user_name ON vaults(user_id, name);
 `;
-
-/** Migration to add opaque_id and display_name columns */
-export const MIGRATION_ADD_OPAQUE_ID_SQL = `
--- Add opaque_id column if not exists
-ALTER TABLE users ADD COLUMN opaque_id TEXT UNIQUE;
--- Add display_name column if not exists  
-ALTER TABLE users ADD COLUMN display_name TEXT;
--- Create index
-CREATE INDEX IF NOT EXISTS idx_users_opaque_id ON users(opaque_id);
-`;
