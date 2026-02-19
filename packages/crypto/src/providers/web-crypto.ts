@@ -29,7 +29,7 @@ export class WebCryptoProvider implements ICryptoProvider {
     // Import key for Web Crypto
     const cryptoKey = await crypto.subtle.importKey(
       'raw',
-      key.buffer as ArrayBuffer,
+      key.buffer.slice(key.byteOffset, key.byteOffset + key.byteLength),
       { name: 'AES-GCM' },
       false,
       ['encrypt']
@@ -40,7 +40,7 @@ export class WebCryptoProvider implements ICryptoProvider {
       await crypto.subtle.encrypt(
         { name: 'AES-GCM', iv: actualIv as Uint8Array<ArrayBuffer> },
         cryptoKey,
-        plaintext.buffer as ArrayBuffer
+        plaintext.buffer.slice(plaintext.byteOffset, plaintext.byteOffset + plaintext.byteLength)
       )
     );
 
@@ -78,7 +78,7 @@ export class WebCryptoProvider implements ICryptoProvider {
     // Import key for Web Crypto
     const cryptoKey = await crypto.subtle.importKey(
       'raw',
-      key.buffer as ArrayBuffer,
+      key.buffer.slice(key.byteOffset, key.byteOffset + key.byteLength),
       { name: 'AES-GCM' },
       false,
       ['decrypt']
@@ -89,7 +89,7 @@ export class WebCryptoProvider implements ICryptoProvider {
       const plaintext = await crypto.subtle.decrypt(
         { name: 'AES-GCM', iv: iv as Uint8Array<ArrayBuffer> },
         cryptoKey,
-        ciphertext.buffer as ArrayBuffer
+        ciphertext.buffer.slice(ciphertext.byteOffset, ciphertext.byteOffset + ciphertext.byteLength)
       );
       return new Uint8Array(plaintext);
     } catch (error) {

@@ -59,18 +59,25 @@ export class TokenManager {
   }
 
   /**
-   * Get current token
+   * Get current token (returns null if expired, without side effects)
    */
   getToken(): Token | null {
     if (!this.token) return null
     
-    // Check if expired
-    if (Date.now() >= this.token.expiresAt) {
-      this.clearToken()
+    // Return null if expired, but don't clear (no side effects in getter)
+    if (this.isExpired()) {
       return null
     }
     
     return this.token
+  }
+
+  /**
+   * Check if the current token is expired
+   */
+  isExpired(): boolean {
+    if (!this.token) return true
+    return Date.now() >= this.token.expiresAt
   }
 
   /**
@@ -84,8 +91,7 @@ export class TokenManager {
    * Check if token is valid
    */
   isValid(): boolean {
-    const token = this.getToken()
-    return token !== null && Date.now() < token.expiresAt
+    return this.token !== null && !this.isExpired()
   }
 
   /**

@@ -15,6 +15,7 @@ import {
   recoveryKeyToBytes,
   encryptWithJwk,
   decryptWithJwk,
+  constantTimeEqual,
   type CipherJWK,
 } from "@ursalock/crypto";
 import type { IStorageProvider, IVaultStorage } from "./interfaces/storage.js";
@@ -291,10 +292,5 @@ function base64ToBytes(base64: string): Uint8Array {
   return bytes;
 }
 
-function arrayEqual(a: Uint8Array, b: Uint8Array): boolean {
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) {
-    if (a[i] !== b[i]) return false;
-  }
-  return true;
-}
+/** Constant-time comparison to prevent timing attacks on key material */
+const arrayEqual = constantTimeEqual;

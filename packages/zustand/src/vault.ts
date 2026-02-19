@@ -119,6 +119,8 @@ type StoreVault<S, Ps> = S extends {
     hasPendingChanges: () => boolean;
     /** Clear all stored data (local + server) */
     clearStorage: () => Promise<void>;
+    /** Clean up sync interval and timers */
+    destroy: () => void;
     /** Subscribe to hydration start */
     onHydrate: (fn: VaultListener<T>) => () => void;
     /** Subscribe to hydration complete */
@@ -379,9 +381,23 @@ const vaultImpl: VaultImpl = (config, baseOptions) => (set, get, api) => {
   }
 
   // Setup sync interval (if server configured)
+  let syncIntervalId: ReturnType<typeof setInterval> | null = null;
   if (server && syncInterval > 0) {
-    setInterval(() => void sync(), syncInterval);
+    syncIntervalId = setInterval(() => void sync(), syncInterval);
   }
+
+  // Expose destroy method to clean up interval
+  const vaultApi = storeWithVault.vault as Record<string, unknown>;
+  vaultApi.destroy = () => {
+    if (syncIntervalId) {
+      clearInterval(syncIntervalId);
+      syncIntervalId = null;
+    }
+    if (syncDebounceTimer) {
+      clearTimeout(syncDebounceTimer);
+      syncDebounceTimer = null;
+    }
+  };
 
   return configResult;
 };
