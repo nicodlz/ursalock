@@ -48,6 +48,8 @@ export interface SyncOptions {
   onStatusChange?: (status: SyncStatus) => void;
   /** HTTP client for making requests (default: FetchHttpClient) */
   httpClient?: IHttpClient;
+  /** Storage provider for offline queue (default: localStorage) */
+  storageProvider?: { getItem(key: string): string | null; setItem(key: string, value: string): void };
 }
 
 /** Offline queue stored in localStorage */
@@ -73,8 +75,12 @@ export function createSyncEngine(options: SyncOptions) {
     onServerData, 
     getLocalData, 
     onStatusChange,
-    httpClient = new FetchHttpClient()
+    httpClient = new FetchHttpClient(),
+    storageProvider,
   } = options;
+  
+  // Use provided storage or fall back to localStorage
+  const queueStorage = storageProvider ?? (typeof localStorage !== "undefined" ? localStorage : null);
   
   let status: SyncStatus = "idle";
   let lastSyncAt: number | null = null;
@@ -90,9 +96,9 @@ export function createSyncEngine(options: SyncOptions) {
    * Load offline queue from localStorage
    */
   const loadQueue = (): OfflineQueue => {
-    if (typeof localStorage === "undefined") return { pending: [] };
+    if (!queueStorage) return { pending: [] };
     try {
-      const stored = localStorage.getItem(`${QUEUE_KEY}:${name}`);
+      const stored = queueStorage.getItem(`${QUEUE_KEY}:${name}`);
       return stored ? JSON.parse(stored) : { pending: [] };
     } catch {
       return { pending: [] };
@@ -100,12 +106,12 @@ export function createSyncEngine(options: SyncOptions) {
   };
 
   /**
-   * Save offline queue to localStorage
+   * Save offline queue to storage
    */
   const saveQueue = (queue: OfflineQueue): void => {
-    if (typeof localStorage === "undefined") return;
+    if (!queueStorage) return;
     try {
-      localStorage.setItem(`${QUEUE_KEY}:${name}`, JSON.stringify(queue));
+      queueStorage.setItem(`${QUEUE_KEY}:${name}`, JSON.stringify(queue));
     } catch {
       // Storage full or unavailable
     }

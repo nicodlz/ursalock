@@ -109,7 +109,7 @@ export const authRouter = new Hono<{
         user: {
           id: session.user.uid,
           email: session.user.email,
-          createdAt: 0, // Not needed for /me
+          createdAt: session.user.createdAt,
         },
       } satisfies MeResponse);
     },

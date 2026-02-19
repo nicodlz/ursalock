@@ -51,7 +51,7 @@ export const zkcRouter = new Hono()
       // Check if opaque ID already registered
       const existing = getUserByOpaqueId(opaqueId);
       if (existing) {
-        throw new ApiException(errors.email_already_exists as ApiError, 409);
+        throw new ApiException(errors.opaque_id_exists as ApiError, 409);
       }
 
       // Create user with opaque ID (no email, no password)

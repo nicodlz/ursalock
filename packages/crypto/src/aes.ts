@@ -15,7 +15,7 @@ import type { ICryptoProvider, IEncryptedPayload } from './interfaces.js'
 import { WebCryptoProvider } from './providers/web-crypto.js'
 
 /** Encrypted payload structure (backward compatibility) */
-export interface EncryptedPayload extends IEncryptedPayload {}
+export type EncryptedPayload = IEncryptedPayload;
 
 /** Default crypto provider instance */
 let defaultProvider: ICryptoProvider = new WebCryptoProvider()
