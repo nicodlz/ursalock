@@ -12,6 +12,7 @@ import { ZodError } from "zod";
 import { authRouter } from "#api/auth/router.js";
 import { vaultRouter } from "#api/vault/router.js";
 import { ApiException, errors, type ApiError } from "#errors.js";
+import { env } from "#env.js";
 
 /** Global error handler */
 const errorHandler: ErrorHandler = (error, c) => {
@@ -57,11 +58,13 @@ export function createApp() {
   const app = new Hono();
 
   // Middleware
-  app.use("*", logger());
+  if (env.NODE_ENV !== "production") {
+    app.use("*", logger());
+  }
   app.use(
     "*",
     cors({
-      origin: "*", // Configure for production
+      origin: env.RP_ORIGINS,
       allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
       allowHeaders: ["Content-Type", "Authorization"],
       exposeHeaders: ["X-Request-Id"],

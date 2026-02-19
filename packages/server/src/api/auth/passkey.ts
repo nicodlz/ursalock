@@ -262,18 +262,18 @@ export const passkeyRouter = new Hono()
         throw new ApiException(errors.passkey_not_found as ApiError, 401);
       }
 
-      // Find the challenge
-      let storedChallenge: string | null = null;
-      for (const [key, value] of challengeStore) {
-        if (key.startsWith("auth:") && value.expiresAt > Date.now()) {
-          storedChallenge = value.challenge;
-          break;
-        }
-      }
+      // Extract challenge from the authenticator response
+      const clientDataJSON = JSON.parse(
+        Buffer.from(response.response.clientDataJSON, "base64url").toString("utf-8")
+      );
+      const challengeFromResponse = clientDataJSON.challenge;
+      const challengeKey = `auth:${challengeFromResponse}`;
 
-      if (!storedChallenge) {
+      const storedChallengeData = challengeStore.get(challengeKey);
+      if (!storedChallengeData || storedChallengeData.expiresAt < Date.now()) {
         throw new ApiException(errors.invalid_credentials as ApiError, 401);
       }
+      const storedChallenge = storedChallengeData.challenge;
 
       // Get RP config from request origin
       const { rpId, rpOrigin } = getRpConfigFromRequest(c);
@@ -309,7 +309,7 @@ export const passkeyRouter = new Hono()
         createSession({ userId: passkey.user.id, tokenHash, expiresAt });
 
         // Clean up challenge
-        challengeStore.delete(`auth:${storedChallenge}`);
+        challengeStore.delete(challengeKey);
 
         return c.json({
           user: {
