@@ -1,6 +1,6 @@
 {
   "name": "@ursalock/zustand",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Encrypted persistence middleware for Zustand with passkey E2EE",
   "type": "module",
   "main": "./dist/index.js",
@@ -22,7 +22,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@ursalock/crypto": "^0.3.1"
+    "@ursalock/crypto": "^0.4.0"
   },
   "peerDependencies": {
     "zustand": ">=4.0.0"

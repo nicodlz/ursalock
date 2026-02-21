@@ -1,6 +1,6 @@
 {
   "name": "@ursalock/client",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Auth and API client for ursalock with E2EE passkey encryption",
   "type": "module",
   "main": "./dist/index.js",

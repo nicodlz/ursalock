@@ -22,8 +22,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@ursalock/crypto": "^0.3.1",
-    "@ursalock/client": "^0.3.1"
+    "@ursalock/crypto": "^0.4.0",
+    "@ursalock/client": "^0.4.0"
   },
   "devDependencies": {
     "tsup": "^8.0.0",
