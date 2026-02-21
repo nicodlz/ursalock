@@ -4,7 +4,7 @@
  */
 
 import type { IVaultRepository, VaultEntity } from "#interfaces/repositories.js";
-import { ApiException, errors } from "#errors.js";
+import { ApiException, errors, errorBuilders } from "#errors.js";
 import type { VaultResponse, VaultsListResponse } from "#api/schemas.js";
 
 /**
@@ -72,7 +72,7 @@ export class VaultService {
     // Check if vault with same name exists
     const existing = this.vaultRepo.findByName(data.name, userId);
     if (existing) {
-      throw new ApiException(errors.vault_already_exists(data.name), 409);
+      throw new ApiException(errorBuilders.vaultAlreadyExists(data.name), 409);
     }
 
     const vault = this.vaultRepo.create({

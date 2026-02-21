@@ -483,23 +483,41 @@ export interface UpdateDocumentInput {
   version?: number;
 }
 
-export function updateDocument(uid: string, vaultUid: string, userId: number, input: UpdateDocumentInput): Document | undefined {
+/** Result of an update attempt with version conflict detection */
+export interface UpdateDocumentResult {
+  document?: Document;
+  /** True when document exists but version doesn't match (only when version provided) */
+  conflict: boolean;
+}
+
+export function updateDocument(uid: string, vaultUid: string, userId: number, input: UpdateDocumentInput): UpdateDocumentResult {
   const db = getDb();
   if (input.version != null) {
-    // Optimistic locking: only update if version matches
-    const stmt = db.prepare(`
-      UPDATE documents SET data = ?, hmac = ?, version = ? + 1, updated_at = unixepoch()
-      WHERE uid = ? AND vault_uid = ? AND user_id = ? AND version = ?
-      RETURNING ${DOCUMENT_COLUMNS}
-    `);
-    return stmt.get(input.data, input.hmac ?? null, input.version, uid, vaultUid, userId, input.version) as Document | undefined;
+    // Optimistic locking: atomically attempt update + check existence in one transaction
+    const result = db.transaction(() => {
+      const stmt = db.prepare(`
+        UPDATE documents SET data = ?, hmac = ?, version = ? + 1, updated_at = unixepoch()
+        WHERE uid = ? AND vault_uid = ? AND user_id = ? AND version = ?
+        RETURNING ${DOCUMENT_COLUMNS}
+      `);
+      const doc = stmt.get(input.data, input.hmac ?? null, input.version, uid, vaultUid, userId, input.version) as Document | undefined;
+      if (doc) return { document: doc, conflict: false };
+
+      // Version didn't match — check if document exists at all
+      const exists = db.prepare(
+        `SELECT 1 FROM documents WHERE uid = ? AND vault_uid = ? AND user_id = ?`
+      ).get(uid, vaultUid, userId);
+      return { document: undefined, conflict: !!exists };
+    })();
+    return result;
   }
   const stmt = db.prepare(`
     UPDATE documents SET data = ?, hmac = ?, version = version + 1, updated_at = unixepoch()
     WHERE uid = ? AND vault_uid = ? AND user_id = ?
     RETURNING ${DOCUMENT_COLUMNS}
   `);
-  return stmt.get(input.data, input.hmac ?? null, uid, vaultUid, userId) as Document | undefined;
+  const doc = stmt.get(input.data, input.hmac ?? null, uid, vaultUid, userId) as Document | undefined;
+  return { document: doc, conflict: false };
 }
 
 export function softDeleteDocument(uid: string, vaultUid: string, userId: number): Document | undefined {

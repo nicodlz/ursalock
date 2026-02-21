@@ -32,14 +32,15 @@ import { parseApiKeyScopes } from "#db/schema.js";
 /** Max API keys per user (prevents abuse) */
 const MAX_API_KEYS_PER_USER = 50;
 
+import { passkeyRouter } from "./passkey.js";
+import { zkcRouter } from "./zkc.js";
+
 /** Guard: API key management requires JWT auth (not API key auth) */
 function requireJwtSession(session: SessionContext): void {
   if (session.apiKey) {
     throw new ApiException(errors.insufficient_permissions, 403);
   }
 }
-import { passkeyRouter } from "./passkey.js";
-import { zkcRouter } from "./zkc.js";
 
 export const authRouter = new Hono<{
   Variables: { session: SessionContext };

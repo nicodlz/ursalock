@@ -208,37 +208,6 @@ export const requireVaultAccess = createMiddleware<{
 });
 
 /**
- * Require collection access middleware factory
- * Takes a function to extract the collection name from the request context,
- * avoiding body stream consumption issues.
- *
- * For routes where collection comes from query params, use:
- *   requireCollectionAccess((c) => c.req.query("collection"))
- *
- * For routes where collection comes from validated body, check inline
- * after Zod validation in the handler (body already parsed).
- */
-export const requireCollectionAccess = (getCollection: (c: unknown) => string | undefined) => {
-  return createMiddleware<{
-    Variables: { session: SessionContext };
-  }>(async (c, next) => {
-    const session = c.get("session");
-    
-    if (!session.apiKey) return next();
-    if (session.apiKey.collections === null) return next();
-
-    const collection = getCollection(c);
-    if (!collection) return next();
-
-    if (!session.apiKey.collections.includes(collection)) {
-      throw new ApiException(getError("insufficient_permissions"), 403);
-    }
-
-    return next();
-  });
-};
-
-/**
  * Inline collection scope check for use after Zod body validation.
  * Call this in handlers where collection comes from the parsed body.
  */

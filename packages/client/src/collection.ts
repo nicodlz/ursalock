@@ -5,7 +5,7 @@
  * for integrity verification in transit/storage.
  */
 
-import { encrypt, decrypt, computeHmac, verifyHmac } from "@ursalock/crypto";
+import { encrypt, decrypt, computeHmac, verifyHmac, bytesToBase64, base64ToBytes } from "@ursalock/crypto";
 import type { IHttpClient } from "./interfaces/http-client.js";
 import type { Document, DocumentResponse, ListOptions, SyncResult } from "./document.js";
 
@@ -24,7 +24,15 @@ export class Collection<T> {
     private hmacKey: Uint8Array | undefined,
     private getAuthHeader: () => Record<string, string>,
     private httpClient?: IHttpClient,
-  ) {}
+  ) {
+    // Fail-fast: validate key sizes to give clear errors instead of cryptic Web Crypto failures
+    if (encryptionKey.length !== 32) {
+      throw new Error(`Encryption key must be 32 bytes (AES-256), got ${encryptionKey.length}`);
+    }
+    if (hmacKey !== undefined && hmacKey.length !== 32) {
+      throw new Error(`HMAC key must be 32 bytes, got ${hmacKey.length}`);
+    }
+  }
 
   /**
    * Create a new document
@@ -94,9 +102,14 @@ export class Collection<T> {
   }
 
   /**
-   * Update a document
+   * Update a document by shallow-merging partial content with the current value.
+   * 
+   * NOTE: This performs a shallow merge (`{ ...current, ...content }`).
+   * Nested objects are replaced, not deep-merged. For full replacement
+   * without a fetch round-trip, use `replace()`.
+   * 
    * @param uid Document uid
-   * @param content Partial content to merge (or full replacement)
+   * @param content Partial content to shallow-merge
    * @returns Updated document
    */
   async update(uid: string, content: Partial<T>): Promise<Document<T>> {
@@ -104,26 +117,21 @@ export class Collection<T> {
     const current = await this.get(uid);
     const merged = { ...current.content, ...content };
 
-    const { data, hmac } = await this.encryptContent(merged);
+    return this.putDocument(uid, merged, current.version);
+  }
 
-    const body: Record<string, unknown> = {
-      data,
-      version: current.version,
-    };
-
-    if (hmac) {
-      body.hmac = hmac;
-    }
-
-    const response = await this.request<DocumentResponse>(`/vault/${this.vaultUid}/documents/${uid}`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-    });
-
-    return this.decryptDocument(response);
+  /**
+   * Replace a document's content entirely (no fetch, no merge).
+   * Use this when you already have the full content and version.
+   * Saves one round-trip compared to `update()`.
+   * 
+   * @param uid Document uid
+   * @param content Full replacement content
+   * @param version Current version for optimistic locking
+   * @returns Updated document
+   */
+  async replace(uid: string, content: T, version: number): Promise<Document<T>> {
+    return this.putDocument(uid, content, version);
   }
 
   /**
@@ -166,6 +174,32 @@ export class Collection<T> {
   // ==================
 
   /**
+   * PUT a document with encrypted content (shared by update + replace)
+   */
+  private async putDocument(uid: string, content: T, version: number): Promise<Document<T>> {
+    const { data, hmac } = await this.encryptContent(content);
+
+    const body: Record<string, unknown> = {
+      data,
+      version,
+    };
+
+    if (hmac) {
+      body.hmac = hmac;
+    }
+
+    const response = await this.request<DocumentResponse>(`/vault/${this.vaultUid}/documents/${uid}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+
+    return this.decryptDocument(response);
+  }
+
+  /**
    * Encrypt content to base64 string with optional HMAC
    */
   private async encryptContent(content: T): Promise<{ data: string; hmac?: string }> {
@@ -177,7 +211,7 @@ export class Collection<T> {
     const encrypted = await encrypt(plaintext, this.encryptionKey);
 
     // Convert to base64
-    const data = this.bytesToBase64(encrypted.combined);
+    const data = bytesToBase64(encrypted.combined);
 
     // Compute HMAC if key provided
     let hmac: string | undefined;
@@ -205,7 +239,7 @@ export class Collection<T> {
     }
 
     // Decode from base64
-    const encryptedBytes = this.base64ToBytes(response.data);
+    const encryptedBytes = base64ToBytes(response.data);
 
     // Decrypt
     const plaintext = await decrypt(encryptedBytes, this.encryptionKey);
@@ -265,28 +299,5 @@ export class Collection<T> {
     }
 
     return response.json() as Promise<R>;
-  }
-
-  /**
-   * Convert Uint8Array to base64 string
-   */
-  private bytesToBase64(bytes: Uint8Array): string {
-    let binary = '';
-    for (let i = 0; i < bytes.length; i++) {
-      binary += String.fromCharCode(bytes[i]);
-    }
-    return btoa(binary);
-  }
-
-  /**
-   * Convert base64 string to Uint8Array
-   */
-  private base64ToBytes(base64: string): Uint8Array {
-    const binary = atob(base64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) {
-      bytes[i] = binary.charCodeAt(i);
-    }
-    return bytes;
   }
 }

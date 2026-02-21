@@ -37,7 +37,7 @@ export {
   formatRecoveryKey,
   type RecoveryKey,
 } from "./recovery.js";
-export { randomBytes, constantTimeEqual } from "./utils.js";
+export { randomBytes, constantTimeEqual, bytesToBase64, base64ToBytes } from "./utils.js";
 export { computeHmac, verifyHmac } from "./hmac.js";
 export { hkdf, deriveVaultKeys, type VaultKeys } from "./hkdf.js";
 
