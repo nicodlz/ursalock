@@ -14,7 +14,6 @@ import { ZodError } from "zod";
 import { authRouter } from "#api/auth/router.js";
 import { vaultRouter } from "#api/vault/router.js";
 import { rateLimit } from "#features/auth/rate-limit.js";
-import { csrfProtection } from "#features/auth/csrf.js";
 import { ApiException, errors, type ApiError } from "#errors.js";
 import { env, getAllowedOrigins } from "#env.js";
 
@@ -98,8 +97,11 @@ export function createApp() {
   // Global rate limit
   app.use("*", rateLimit({ max: 100, windowMs: 60_000 }));
 
-  // CSRF protection on mutating requests
-  app.use("*", csrfProtection);
+  // CSRF protection is intentionally NOT enabled globally.
+  // This API uses Bearer token auth + strict CORS origin validation,
+  // which is immune to CSRF attacks. The double-submit cookie pattern
+  // is only needed for cookie-based session auth (not our case).
+  // See: https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html#token-based-mitigation
 
   // Health check
   app.get("/health", (c) => c.json({ status: "ok", timestamp: Date.now() }));
