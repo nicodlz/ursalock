@@ -2,15 +2,19 @@
   "name": "ursalock",
   "version": "0.0.0",
   "private": true,
+  "packageManager": "npm@10.9.4",
   "type": "module",
   "workspaces": [
     "packages/*"
   ],
   "scripts": {
-    "build": "turbo run build",
-    "test": "turbo run test",
-    "lint": "turbo run lint",
-    "typecheck": "turbo run typecheck"
+    "build": "npx turbo run build",
+    "test": "npx turbo run test",
+    "lint": "npx turbo run lint",
+    "typecheck": "npx turbo run typecheck",
+    "lint:eslint": "eslint 'packages/*/src/**/*.ts'",
+    "format": "prettier --write 'packages/*/src/**/*.ts'",
+    "format:check": "prettier --check 'packages/*/src/**/*.ts'"
   },
   "devDependencies": {
     "turbo": "^2.0.0",

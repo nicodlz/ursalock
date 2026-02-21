@@ -18,6 +18,8 @@ export function getDb(): Database.Database {
     _db = new Database(env.DATABASE_PATH);
     _db.pragma("journal_mode = WAL");
     _db.pragma("foreign_keys = ON");
+    // Overwrite deleted data with zeros to prevent recovery of sensitive vault content
+    _db.pragma("secure_delete = ON");
     _db.exec(CREATE_TABLES_SQL);
     
     // Run migrations for new columns
@@ -238,8 +240,35 @@ export interface CreateSessionInput {
   expiresAt: number;
 }
 
+/** Maximum concurrent sessions per user */
+const MAX_SESSIONS = 10;
+
+/**
+ * Create a session, enforcing a per-user session limit.
+ * If the user already has MAX_SESSIONS active sessions, the oldest is deleted.
+ */
 export function createSession(input: CreateSessionInput): Session {
   const db = getDb();
+
+  // Enforce session limit: count active sessions for this user
+  const countStmt = db.prepare(
+    `SELECT COUNT(*) as cnt FROM sessions WHERE user_id = ? AND expires_at > unixepoch()`,
+  );
+  const { cnt } = countStmt.get(input.userId) as { cnt: number };
+
+  if (cnt >= MAX_SESSIONS) {
+    // Delete the oldest active session(s) to make room
+    const deleteOldest = db.prepare(`
+      DELETE FROM sessions WHERE id IN (
+        SELECT id FROM sessions
+        WHERE user_id = ? AND expires_at > unixepoch()
+        ORDER BY created_at ASC
+        LIMIT ?
+      )
+    `);
+    deleteOldest.run(input.userId, cnt - MAX_SESSIONS + 1);
+  }
+
   const stmt = db.prepare(`
     INSERT INTO sessions (user_id, token_hash, expires_at)
     VALUES (?, ?, ?)

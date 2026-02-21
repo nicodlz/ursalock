@@ -19,7 +19,7 @@ export type {
 export { WebCryptoProvider } from "./providers/web-crypto.js";
 
 // Legacy recovery key based encryption (for backward compatibility)
-export { deriveKey, DEFAULT_ARGON2_PARAMS, type DeriveKeyOptions, type DerivedKey } from "./derive.js";
+export { deriveKey, DEFAULT_ARGON2_PARAMS, LEGACY_ARGON2_PARAMS, type DeriveKeyOptions, type DerivedKey } from "./derive.js";
 export {
   encrypt,
   decrypt,
@@ -38,6 +38,7 @@ export {
   type RecoveryKey,
 } from "./recovery.js";
 export { randomBytes, constantTimeEqual } from "./utils.js";
+export { computeHmac, verifyHmac } from "./hmac.js";
 
 // New JWK-based encryption (for ZKCredentials PRF-derived keys)
 export {

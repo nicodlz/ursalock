@@ -39,7 +39,14 @@ export interface Session {
   createdAt: number;
 }
 
-/** Encrypted vault blob */
+/**
+ * Encrypted vault blob
+ *
+ * TODO(security): The `name` field is stored in plaintext, which is a metadata leak.
+ * Vault names should be encrypted or hashed client-side before being sent to the server.
+ * This requires a coordinated client+server migration (breaking change) and is deferred
+ * to a future version. See also: packages/server/src/api/schemas.ts
+ */
 export interface Vault {
   id: number;
   uid: string;

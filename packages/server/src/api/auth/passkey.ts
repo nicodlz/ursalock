@@ -33,18 +33,88 @@ import { env } from "#env.js";
 // NOTE: Recovery key generation removed - now using ZKCredentials PRF
 // Legacy passkey routes kept for backward compatibility
 import { getRpConfigFromRequest } from "#features/auth/origin.js";
+import { logAuthEvent, extractRequestMeta } from "#features/auth/audit-log.js";
 
-// In-memory challenge store (should use Redis in production)
-const challengeStore = new Map<string, { challenge: string; email?: string; userId?: number; expiresAt: number }>();
+/**
+ * In-memory challenge store for WebAuthn ceremonies.
+ *
+ * @remarks
+ * This implementation is suitable for single-instance deployments.
+ * **For production multi-instance deployments, replace with Redis or another
+ * shared store** to ensure challenges are accessible across all server instances
+ * and to benefit from automatic TTL-based expiry.
+ *
+ * Constraints:
+ * - Maximum {@link MAX_CHALLENGES} entries to prevent memory exhaustion
+ * - Expired challenges are pruned on every access and periodically
+ * - When at capacity, oldest entries are evicted (LRU-style)
+ */
 
-// Cleanup expired challenges periodically
-setInterval(() => {
+interface ChallengeEntry {
+  challenge: string;
+  email?: string;
+  userId?: number;
+  expiresAt: number;
+}
+
+const MAX_CHALLENGES = 1000;
+const challengeStore = new Map<string, ChallengeEntry>();
+
+/**
+ * Remove all expired entries from the challenge store.
+ */
+function pruneExpiredChallenges(): void {
   const now = Date.now();
   for (const [key, value] of challengeStore) {
     if (value.expiresAt < now) {
       challengeStore.delete(key);
     }
   }
+}
+
+/**
+ * Evict oldest entries when the store exceeds MAX_CHALLENGES.
+ */
+function evictOldestChallenges(): void {
+  if (challengeStore.size <= MAX_CHALLENGES) return;
+
+  // Map preserves insertion order — delete earliest entries
+  const excess = challengeStore.size - MAX_CHALLENGES;
+  let deleted = 0;
+  for (const key of challengeStore.keys()) {
+    if (deleted >= excess) break;
+    challengeStore.delete(key);
+    deleted++;
+  }
+}
+
+/**
+ * Store a challenge with automatic capacity management.
+ */
+function setChallenge(key: string, entry: ChallengeEntry): void {
+  pruneExpiredChallenges();
+  challengeStore.set(key, entry);
+  evictOldestChallenges();
+}
+
+/**
+ * Retrieve and validate a challenge (returns undefined if expired or missing).
+ */
+function getChallenge(key: string): ChallengeEntry | undefined {
+  const entry = challengeStore.get(key);
+  if (!entry) return undefined;
+
+  if (entry.expiresAt < Date.now()) {
+    challengeStore.delete(key);
+    return undefined;
+  }
+
+  return entry;
+}
+
+// Periodic cleanup as safety net (in addition to per-access pruning)
+setInterval(() => {
+  pruneExpiredChallenges();
 }, 60000);
 
 // Schemas
@@ -108,7 +178,7 @@ export const passkeyRouter = new Hono()
 
       // Store challenge for verification - use challenge itself as key
       // This works because the challenge is returned to client and sent back in verify
-      challengeStore.set(options.challenge, {
+      setChallenge(options.challenge, {
         challenge: options.challenge,
         email: email ?? undefined,
         expiresAt: Date.now() + 120000, // 2 min expiry
@@ -134,7 +204,7 @@ export const passkeyRouter = new Hono()
       const challenge = clientDataJSON.challenge;
 
       // Get stored challenge data
-      const stored = challengeStore.get(challenge);
+      const stored = getChallenge(challenge);
       
       if (!stored) {
         throw new ApiException(errors.invalid_credentials as ApiError, 401);
@@ -202,7 +272,13 @@ export const passkeyRouter = new Hono()
         });
       } catch (error) {
         if (error instanceof ApiException) throw error;
-        console.error("Passkey registration error:", error);
+        logAuthEvent({
+          timestamp: new Date().toISOString(),
+          level: "warn",
+          event: "passkey_register_fail",
+          ...extractRequestMeta(c),
+          details: { reason: String(error) },
+        });
         throw new ApiException(errors.invalid_credentials as ApiError, 401);
       }
     },
@@ -242,7 +318,7 @@ export const passkeyRouter = new Hono()
 
       // Store challenge
       const challengeKey = `auth:${options.challenge}`;
-      challengeStore.set(challengeKey, {
+      setChallenge(challengeKey, {
         challenge: options.challenge,
         expiresAt: Date.now() + 120000,
       });
@@ -272,8 +348,8 @@ export const passkeyRouter = new Hono()
       const challengeFromResponse = clientDataJSON.challenge;
       const challengeKey = `auth:${challengeFromResponse}`;
 
-      const storedChallengeData = challengeStore.get(challengeKey);
-      if (!storedChallengeData || storedChallengeData.expiresAt < Date.now()) {
+      const storedChallengeData = getChallenge(challengeKey);
+      if (!storedChallengeData) {
         throw new ApiException(errors.invalid_credentials as ApiError, 401);
       }
       const storedChallenge = storedChallengeData.challenge;
@@ -299,8 +375,26 @@ export const passkeyRouter = new Hono()
           throw new ApiException(errors.invalid_credentials as ApiError, 401);
         }
 
+        // Verify counter to detect cloned authenticators
+        const newCounter = verification.authenticationInfo.newCounter;
+        if (newCounter > 0 && newCounter <= passkey.counter) {
+          console.warn(
+            `[SECURITY] Possible cloned authenticator detected! ` +
+            `credentialId=${passkey.credentialId}, ` +
+            `storedCounter=${passkey.counter}, newCounter=${newCounter}, ` +
+            `userId=${passkey.user.uid}`,
+          );
+          throw new ApiException(
+            {
+              code: "invalid_credentials" as const,
+              message: "Authentication rejected: authenticator counter regression detected (possible cloned authenticator)",
+            },
+            401,
+          );
+        }
+
         // Update counter
-        updatePasskeyCounter(passkey.credentialId, verification.authenticationInfo.newCounter);
+        updatePasskeyCounter(passkey.credentialId, newCounter);
 
         // Create session
         const token = await createToken({
@@ -324,7 +418,13 @@ export const passkeyRouter = new Hono()
         });
       } catch (error) {
         if (error instanceof ApiException) throw error;
-        console.error("Passkey authentication error:", error);
+        logAuthEvent({
+          timestamp: new Date().toISOString(),
+          level: "warn",
+          event: "passkey_login_fail",
+          ...extractRequestMeta(c),
+          details: { credentialId: response.id, reason: String(error) },
+        });
         throw new ApiException(errors.invalid_credentials as ApiError, 401);
       }
     },

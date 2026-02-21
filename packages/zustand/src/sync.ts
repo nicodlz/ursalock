@@ -10,6 +10,7 @@
 
 import type { IHttpClient } from "./interfaces/http.js";
 import { FetchHttpClient } from "./providers/fetch-http.js";
+import { computeHmac, verifyHmac } from "@ursalock/crypto";
 
 export type SyncStatus = "idle" | "syncing" | "synced" | "error" | "offline";
 
@@ -31,6 +32,8 @@ export interface ServerVault {
   salt: string;
   version: number;
   updatedAt: number;
+  /** HMAC-SHA256 of the data field (hex). Present on vaults written with integrity enabled. */
+  hmac?: string;
 }
 
 export interface SyncOptions {
@@ -50,6 +53,16 @@ export interface SyncOptions {
   httpClient?: IHttpClient;
   /** Storage provider for offline queue (default: localStorage) */
   storageProvider?: { getItem(key: string): string | null; setItem(key: string, value: string): void };
+  /**
+   * HMAC key for sync integrity verification (Encrypt-then-MAC).
+   * When provided, every push includes an HMAC-SHA256 tag over the
+   * ciphertext; every pull verifies it before passing data to the
+   * decryption layer. This detects server-side tampering.
+   * 
+   * Should be derived from the user's master key via a separate
+   * derivation path (key separation principle).
+   */
+  hmacKey?: Uint8Array;
 }
 
 /** Offline queue stored in localStorage */
@@ -77,7 +90,10 @@ export function createSyncEngine(options: SyncOptions) {
     onStatusChange,
     httpClient = new FetchHttpClient(),
     storageProvider,
+    hmacKey,
   } = options;
+
+  const textEncoder = new TextEncoder();
   
   // Use provided storage or fall back to localStorage
   const queueStorage = storageProvider ?? (typeof localStorage !== "undefined" ? localStorage : null);
@@ -85,6 +101,8 @@ export function createSyncEngine(options: SyncOptions) {
   let status: SyncStatus = "idle";
   let lastSyncAt: number | null = null;
   let error: string | null = null;
+  /** Last known server version for optimistic locking */
+  let knownServerVersion: number | null = null;
 
   const setStatus = (newStatus: SyncStatus, newError?: string) => {
     status = newStatus;
@@ -167,15 +185,60 @@ export function createSyncEngine(options: SyncOptions) {
     if (res.status === 404) return null;
     if (!res.ok) throw new Error(`Server error: ${res.status}`);
 
-    return res.json();
+    const vault = await res.json() as ServerVault;
+    // Track server version for optimistic locking
+    knownServerVersion = vault.version;
+    return vault;
+  };
+
+  /**
+   * Compute HMAC tag for outgoing data (if hmacKey is configured).
+   */
+  const computeTag = async (data: string): Promise<string | undefined> => {
+    if (!hmacKey) return undefined;
+    return computeHmac(textEncoder.encode(data), hmacKey);
+  };
+
+  /**
+   * Verify HMAC integrity of incoming server data.
+   * - Missing HMAC on server data: warn and allow (backward compat with older vaults)
+   * - Invalid HMAC: reject with a clear error
+   */
+  const verifyTag = async (vault: ServerVault): Promise<void> => {
+    if (!hmacKey) return;
+    if (!vault.hmac) {
+      console.warn(
+        "[ursalock] Server vault has no HMAC tag. " +
+        "This is expected for vaults created before integrity verification was enabled. " +
+        "The vault will be re-signed on next push."
+      );
+      return;
+    }
+    const valid = await verifyHmac(
+      textEncoder.encode(vault.data),
+      hmacKey,
+      vault.hmac,
+    );
+    if (!valid) {
+      throw new Error(
+        "[ursalock] HMAC verification failed: server data has been tampered with or the integrity key is wrong"
+      );
+    }
   };
 
   /**
    * Push vault to server (handles race conditions with retry on 409)
+   *
+   * Sends the last known server version for optimistic locking. If the server
+   * detects a version mismatch it returns 409 and we force a pull + re-merge
+   * before retrying the push once.
    */
   const pushServer = async (data: string, salt: string): Promise<ServerVault> => {
     const token = getToken();
     if (!token) throw new Error("Not authenticated");
+
+    // Compute HMAC tag over ciphertext before sending (Encrypt-then-MAC)
+    const hmac = await computeTag(data);
 
     // Try to get existing vault first
     let existing: ServerVault | null = null;
@@ -186,6 +249,12 @@ export function createSyncEngine(options: SyncOptions) {
     }
     
     if (existing) {
+      // Build body with version for optimistic locking
+      const body: Record<string, unknown> = { data, salt, ...(hmac != null && { hmac }) };
+      if (knownServerVersion != null) {
+        body.version = knownServerVersion;
+      }
+
       // Update existing vault
       const res = await httpClient.request({
         url: `${serverUrl}/vault/${existing.uid}`,
@@ -194,14 +263,52 @@ export function createSyncEngine(options: SyncOptions) {
           "Authorization": `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ data, salt }),
+        body: JSON.stringify(body),
       });
+
+      // Handle version conflict: pull latest, re-merge, retry once
+      if (res.status === 409) {
+        const latest = await fetchServer();
+        if (latest) {
+          await verifyTag(latest);
+          onServerData(latest.data, latest.salt, latest.updatedAt);
+          // Retry with fresh local data and updated version
+          const retryLocal = getLocalData();
+          const retryHmac = await computeTag(retryLocal.data);
+          const retryBody: Record<string, unknown> = {
+            data: retryLocal.data,
+            salt: retryLocal.salt,
+            ...(retryHmac != null && { hmac: retryHmac }),
+          };
+          if (knownServerVersion != null) {
+            retryBody.version = knownServerVersion;
+          }
+          const retryRes = await httpClient.request({
+            url: `${serverUrl}/vault/${existing.uid}`,
+            method: "PUT",
+            headers: {
+              "Authorization": `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(retryBody),
+          });
+          if (!retryRes.ok) {
+            const errorText = await retryRes.text().catch(() => "");
+            throw new Error(`Server error: ${retryRes.status} ${errorText}`);
+          }
+          const result = await retryRes.json() as ServerVault;
+          knownServerVersion = result.version;
+          return result;
+        }
+      }
 
       if (!res.ok) {
         const errorText = await res.text().catch(() => "");
         throw new Error(`Server error: ${res.status} ${errorText}`);
       }
-      return res.json();
+      const result = await res.json() as ServerVault;
+      knownServerVersion = result.version;
+      return result;
     }
 
     // Try to create new vault
@@ -212,7 +319,7 @@ export function createSyncEngine(options: SyncOptions) {
         "Authorization": `Bearer ${token}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ name, data, salt }),
+      body: JSON.stringify({ name, data, salt, ...(hmac != null && { hmac }) }),
     });
 
     // Handle race condition: vault was created between our check and POST
@@ -223,6 +330,11 @@ export function createSyncEngine(options: SyncOptions) {
         throw new Error("Vault conflict but not found on retry");
       }
       
+      const retryBody: Record<string, unknown> = { data, salt, ...(hmac != null && { hmac }) };
+      if (knownServerVersion != null) {
+        retryBody.version = knownServerVersion;
+      }
+
       const retryRes = await httpClient.request({
         url: `${serverUrl}/vault/${nowExisting.uid}`,
         method: "PUT",
@@ -230,21 +342,25 @@ export function createSyncEngine(options: SyncOptions) {
           "Authorization": `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ data, salt }),
+        body: JSON.stringify(retryBody),
       });
 
       if (!retryRes.ok) {
         const errorText = await retryRes.text().catch(() => "");
         throw new Error(`Server error: ${retryRes.status} ${errorText}`);
       }
-      return retryRes.json();
+      const result = await retryRes.json() as ServerVault;
+      knownServerVersion = result.version;
+      return result;
     }
 
     if (!createRes.ok) {
       const errorText = await createRes.text().catch(() => "");
       throw new Error(`Server error: ${createRes.status} ${errorText}`);
     }
-    return createRes.json();
+    const result = await createRes.json() as ServerVault;
+    knownServerVersion = result.version;
+    return result;
   };
 
   /**
@@ -280,7 +396,8 @@ export function createSyncEngine(options: SyncOptions) {
           await pushServer(local.data, local.salt);
         }
       } else if (server.updatedAt > local.updatedAt) {
-        // Server is newer, pull
+        // Server is newer — verify integrity before accepting
+        await verifyTag(server);
         onServerData(server.data, server.salt, server.updatedAt);
       } else if (local.updatedAt > server.updatedAt) {
         // Local is newer, push
@@ -349,6 +466,7 @@ export function createSyncEngine(options: SyncOptions) {
       if (server) {
         const local = getLocalData();
         if (server.updatedAt > local.updatedAt) {
+          await verifyTag(server);
           onServerData(server.data, server.salt, server.updatedAt);
           lastSyncAt = Date.now();
           setStatus("synced");

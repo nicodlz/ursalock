@@ -253,6 +253,64 @@ describe('createSyncEngine', () => {
     })
   })
 
+  describe('version conflict (409)', () => {
+    it('handles 409 by pulling latest and retrying push', async () => {
+      const serverVault = {
+        uid: 'vault-123',
+        name: 'test-vault',
+        data: '{"count":0}',
+        salt: 'salt',
+        version: 2,
+        updatedAt: 500,
+      }
+
+      // 1. fetchServer in pushServer → returns existing vault (version 2)
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => serverVault,
+      })
+
+      // 2. PUT returns 409 (version mismatch)
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 409,
+        text: async () => 'Version conflict',
+      })
+
+      // 3. fetchServer for conflict resolution → returns updated vault (version 3)
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          ...serverVault,
+          data: '{"count":99}',
+          version: 3,
+          updatedAt: 2000,
+        }),
+      })
+
+      // 4. Retry PUT succeeds
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          ...serverVault,
+          data: '{"count":1}',
+          version: 4,
+          updatedAt: 2001,
+        }),
+      })
+
+      const engine = createEngine()
+      await engine.push()
+
+      // Server data callback should have been called with the conflicting version
+      expect(onServerData).toHaveBeenCalledWith('{"count":99}', 'salt', 2000)
+      expect(engine.getState().status).toBe('synced')
+    })
+  })
+
   describe('offline queue', () => {
     it('processes queue on next sync', async () => {
       // First, go offline and push

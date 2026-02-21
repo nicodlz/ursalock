@@ -214,7 +214,7 @@ const vaultImpl: VaultImpl = (config, baseOptions) => (set, get, api) => {
         // Only pull if we haven't made local changes since last sync
         if (localUpdatedAt > updatedAt) {
           // Local is actually newer - don't overwrite, push instead
-          void syncEngine?.push();
+          void syncEngine?.push().catch((err) => console.error("[ursalock] Failed to push after local-newer conflict:", err));
           return;
         }
         try {
@@ -223,7 +223,7 @@ const vaultImpl: VaultImpl = (config, baseOptions) => (set, get, api) => {
           set(merged, true);
           localUpdatedAt = updatedAt;
           // Also persist to local storage to keep in sync
-          void storage.setItem(name, JSON.stringify(partialize({ ...get() })));
+          void storage.setItem(name, JSON.stringify(partialize({ ...get() }))).catch((err) => console.error("[ursalock] Failed to persist server data to local storage:", err));
         } catch (err) {
           console.error("[ursalock] Failed to parse server data:", err);
         }
@@ -253,7 +253,7 @@ const vaultImpl: VaultImpl = (config, baseOptions) => (set, get, api) => {
       }
       syncDebounceTimer = setTimeout(() => {
         syncDebounceTimer = null;
-        void syncEngine?.sync();
+        void syncEngine?.sync().catch((err) => console.error("[ursalock] Debounced sync failed:", err));
       }, 3000);
     }
   };
@@ -372,9 +372,9 @@ const vaultImpl: VaultImpl = (config, baseOptions) => (set, get, api) => {
     void rehydrate().then(() => {
       // Sync immediately after hydration to get latest server data
       if (syncEngine) {
-        void syncEngine.sync();
+        void syncEngine.sync().catch((err) => console.error("[ursalock] Initial sync after hydration failed:", err));
       }
-    });
+    }).catch((err) => console.error("[ursalock] Auto-rehydration failed:", err));
   } else {
     // Even with skipHydration, mark as hydrated to allow persistence
     hasHydrated = true;
@@ -383,7 +383,7 @@ const vaultImpl: VaultImpl = (config, baseOptions) => (set, get, api) => {
   // Setup sync interval (if server configured)
   let syncIntervalId: ReturnType<typeof setInterval> | null = null;
   if (server && syncInterval > 0) {
-    syncIntervalId = setInterval(() => void sync(), syncInterval);
+    syncIntervalId = setInterval(() => void sync().catch((err) => console.error("[ursalock] Periodic sync failed:", err)), syncInterval);
   }
 
   // Expose destroy method to clean up interval

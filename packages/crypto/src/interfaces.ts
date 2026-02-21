@@ -17,14 +17,17 @@ export interface IEncryptedPayload {
 export interface ICryptoProvider {
   /**
    * Encrypt data with AES-GCM
+   * 
+   * The IV is always generated internally using a CSPRNG.
+   * Callers must NOT supply their own IV — reusing an IV with the same
+   * key under AES-GCM is catastrophic (NIST SP 800-38D §8.3).
+   *
    * @param plaintext Data to encrypt
    * @param key 256-bit encryption key
-   * @param iv Optional IV (generated if not provided)
    */
   encrypt(
     plaintext: Uint8Array,
     key: Uint8Array,
-    iv?: Uint8Array
   ): Promise<IEncryptedPayload>;
 
   /**
