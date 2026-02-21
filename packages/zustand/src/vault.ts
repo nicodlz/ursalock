@@ -17,6 +17,10 @@ import { createVaultStorage, type VaultStorage } from "./storage.js";
 import { createSyncEngine, type SyncEngine, type SyncState } from "./sync.js";
 import type { CipherJWK } from "@ursalock/crypto";
 
+/** Log a caught error from a fire-and-forget promise */
+const logCatch = (context: string) => (err: unknown) =>
+  console.error(`[ursalock] ${context}:`, err);
+
 /** Base vault middleware options */
 interface VaultOptionsBase<S, PersistedState = S> {
   /** Unique name for this vault (used as storage key) */
@@ -214,7 +218,7 @@ const vaultImpl: VaultImpl = (config, baseOptions) => (set, get, api) => {
         // Only pull if we haven't made local changes since last sync
         if (localUpdatedAt > updatedAt) {
           // Local is actually newer - don't overwrite, push instead
-          void syncEngine?.push();
+          void syncEngine?.push().catch(logCatch("Push after local-newer conflict"));
           return;
         }
         try {
@@ -223,7 +227,7 @@ const vaultImpl: VaultImpl = (config, baseOptions) => (set, get, api) => {
           set(merged, true);
           localUpdatedAt = updatedAt;
           // Also persist to local storage to keep in sync
-          void storage.setItem(name, JSON.stringify(partialize({ ...get() })));
+          void storage.setItem(name, JSON.stringify(partialize({ ...get() }))).catch(logCatch("Persist server data to local storage"));
         } catch (err) {
           console.error("[ursalock] Failed to parse server data:", err);
         }
@@ -253,7 +257,7 @@ const vaultImpl: VaultImpl = (config, baseOptions) => (set, get, api) => {
       }
       syncDebounceTimer = setTimeout(() => {
         syncDebounceTimer = null;
-        void syncEngine?.sync();
+        void syncEngine?.sync().catch(logCatch("Debounced sync"));
       }, 3000);
     }
   };
@@ -329,7 +333,7 @@ const vaultImpl: VaultImpl = (config, baseOptions) => (set, get, api) => {
     } else {
       savedSetState(state);
     }
-    void persistState().catch((err) => console.error("[ursalock] Failed to persist state:", err));
+    void persistState().catch(logCatch("Persist state"));
   }) as SetState;
 
   // Create store with wrapped set
@@ -340,7 +344,7 @@ const vaultImpl: VaultImpl = (config, baseOptions) => (set, get, api) => {
       } else {
         set(partial);
       }
-      void persistState().catch((err) => console.error("[ursalock] Failed to persist state:", err));
+      void persistState().catch(logCatch("Persist state"));
     }) as typeof set,
     get,
     api,
@@ -372,9 +376,9 @@ const vaultImpl: VaultImpl = (config, baseOptions) => (set, get, api) => {
     void rehydrate().then(() => {
       // Sync immediately after hydration to get latest server data
       if (syncEngine) {
-        void syncEngine.sync();
+        void syncEngine.sync().catch(logCatch("Initial sync after hydration"));
       }
-    });
+    }).catch(logCatch("Auto-rehydration"));
   } else {
     // Even with skipHydration, mark as hydrated to allow persistence
     hasHydrated = true;
@@ -383,7 +387,7 @@ const vaultImpl: VaultImpl = (config, baseOptions) => (set, get, api) => {
   // Setup sync interval (if server configured)
   let syncIntervalId: ReturnType<typeof setInterval> | null = null;
   if (server && syncInterval > 0) {
-    syncIntervalId = setInterval(() => void sync(), syncInterval);
+    syncIntervalId = setInterval(() => void sync().catch(logCatch("Periodic sync")), syncInterval);
   }
 
   // Expose destroy method to clean up interval

@@ -1,10 +1,18 @@
 /**
  * Key derivation using Argon2id
  * 
- * Parameters based on OWASP 2026 recommendations:
- * - Memory: 64 MiB
- * - Iterations: 3
+ * Current parameters based on OWASP 2026 high-security recommendations:
+ * - Memory: 128 MiB (OWASP "higher memory" profile)
+ * - Iterations: 4
  * - Parallelism: 4
+ * 
+ * Legacy parameters (64 MiB / 3 iterations) are preserved for backward
+ * compatibility — existing vaults encrypted with the old defaults can
+ * still be decrypted by passing LEGACY_ARGON2_PARAMS explicitly.
+ * 
+ * References:
+ * - OWASP Password Storage Cheat Sheet (2026 revision)
+ * - RFC 9106 §4 (Argon2 recommended parameters)
  */
 
 import { argon2id } from 'hash-wasm'
@@ -15,9 +23,9 @@ export interface DeriveKeyOptions {
   password: Uint8Array
   /** Salt (32 bytes recommended, auto-generated if not provided) */
   salt?: Uint8Array
-  /** Memory cost in KiB (default: 65536 = 64 MiB) */
+  /** Memory cost in KiB (default: 131072 = 128 MiB) */
   memoryCost?: number
-  /** Time cost / iterations (default: 3) */
+  /** Time cost / iterations (default: 4) */
   timeCost?: number
   /** Parallelism (default: 4) */
   parallelism?: number
@@ -43,13 +51,22 @@ export interface DerivedKey {
  * // Save salt alongside encrypted data
  * // Use key for AES-256-GCM encryption
  * ```
+ * 
+ * @example Decrypt data encrypted with older parameters
+ * ```ts
+ * const { key } = await deriveKey({
+ *   password: recoveryKeyBytes,
+ *   salt: storedSalt,
+ *   ...LEGACY_ARGON2_PARAMS,
+ * })
+ * ```
  */
 export async function deriveKey(options: DeriveKeyOptions): Promise<DerivedKey> {
   const {
     password,
     salt = randomBytes(32),
-    memoryCost = 65536, // 64 MiB
-    timeCost = 3,
+    memoryCost = 131072, // 128 MiB — OWASP 2026 high-security recommendation
+    timeCost = 4,
     parallelism = 4,
     keyLength = 32,
   } = options
@@ -72,9 +89,26 @@ export async function deriveKey(options: DeriveKeyOptions): Promise<DerivedKey> 
 
 /**
  * Default parameters for key derivation
- * Matches OWASP 2026 recommendations for high-security applications
+ * 
+ * OWASP 2026 high-security recommendation:
+ * - 128 MiB memory, 4 iterations, parallelism 4
+ * - Provides ≈ 2× the work factor of the previous defaults
  */
 export const DEFAULT_ARGON2_PARAMS = {
+  memoryCost: 131072, // 128 MiB
+  timeCost: 4,
+  parallelism: 4,
+  keyLength: 32,
+  saltLength: 32,
+} as const
+
+/**
+ * Legacy Argon2id parameters (pre-2026)
+ * 
+ * Use these when decrypting data that was encrypted with older defaults.
+ * New encryptions should always use DEFAULT_ARGON2_PARAMS.
+ */
+export const LEGACY_ARGON2_PARAMS = {
   memoryCost: 65536, // 64 MiB
   timeCost: 3,
   parallelism: 4,

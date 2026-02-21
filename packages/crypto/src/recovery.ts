@@ -58,12 +58,18 @@ export function validateRecoveryKey(key: string): boolean {
   // Must be exactly 52 characters (256 bits in base32)
   if (clean.length !== 52) return false
   
-  // All characters must be valid base32
-  for (const char of clean) {
-    if (!BASE32_ALPHABET.includes(char)) return false
+  // Constant-time validation: always iterate ALL characters to prevent
+  // timing side-channels that could leak partial key validity.
+  // An attacker observing response times must not learn how many
+  // leading characters are valid base32.
+  let valid = true
+  for (let i = 0; i < clean.length; i++) {
+    if (!BASE32_ALPHABET.includes(clean[i])) {
+      valid = false
+    }
   }
   
-  return true
+  return valid
 }
 
 /**

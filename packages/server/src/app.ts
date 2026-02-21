@@ -14,8 +14,9 @@ import { ZodError } from "zod";
 import { authRouter } from "#api/auth/router.js";
 import { vaultRouter } from "#api/vault/router.js";
 import { rateLimit } from "#features/auth/rate-limit.js";
+import { csrfProtection } from "#features/auth/csrf.js";
 import { ApiException, errors, type ApiError } from "#errors.js";
-import { env } from "#env.js";
+import { env, getAllowedOrigins } from "#env.js";
 
 /** Global error handler */
 const errorHandler: ErrorHandler = (error, c) => {
@@ -62,25 +63,49 @@ export function createApp() {
 
   // Middleware
   app.use("*", bodyLimit({ maxSize: 11 * 1024 * 1024 }));
-  app.use("*", secureHeaders());
+  app.use(
+    "*",
+    secureHeaders({
+      strictTransportSecurity: "max-age=63072000; includeSubDomains; preload",
+      contentSecurityPolicy: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        connectSrc: ["'self'"],
+        frameAncestors: ["'none'"],
+      },
+      xFrameOptions: "DENY",
+      xContentTypeOptions: "nosniff",
+      referrerPolicy: "strict-origin-when-cross-origin",
+    }),
+  );
   if (env.NODE_ENV !== "production") {
     app.use("*", logger());
   }
+
+  // Dynamic CORS origin validation
+  const allowedOrigins = new Set(getAllowedOrigins());
   app.use(
     "*",
     cors({
-      origin: env.RP_ORIGINS.split(",").map(s => s.trim()),
+      origin: (origin) => (allowedOrigins.has(origin) ? origin : ""),
       allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-      allowHeaders: ["Content-Type", "Authorization"],
-      exposeHeaders: ["X-Request-Id"],
+      allowHeaders: ["Content-Type", "Authorization", "X-CSRF-Token"],
+      exposeHeaders: ["X-Request-Id", "X-RateLimit-Limit", "X-RateLimit-Remaining", "Retry-After"],
     }),
   );
+
+  // Global rate limit
+  app.use("*", rateLimit({ max: 100, windowMs: 60_000 }));
+
+  // CSRF protection on mutating requests
+  app.use("*", csrfProtection);
 
   // Health check
   app.get("/health", (c) => c.json({ status: "ok", timestamp: Date.now() }));
 
-  // Rate limit auth endpoints
-  app.use("/auth/*", rateLimit({ max: 10, windowMs: 60000 }));
+  // Stricter rate limit for auth endpoints
+  app.use("/auth/*", rateLimit({ max: 10, windowMs: 60_000 }));
 
   // API routes
   app.route("/auth", authRouter);

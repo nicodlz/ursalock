@@ -18,6 +18,8 @@ import {
 import { createToken, hashToken } from "#features/auth/jwt.js";
 import { errors, ApiException, type ApiError } from "#errors.js";
 import { env } from "#env.js";
+import { logAuthEvent, extractRequestMeta } from "#features/auth/audit-log.js";
+import { getRpConfigFromRequest } from "#features/auth/origin.js";
 
 // Request schemas
 const ZkcRegisterRequest = z.object({
@@ -46,11 +48,21 @@ export const zkcRouter = new Hono()
     "/register",
     zValidator("json", ZkcRegisterRequest),
     async (c) => {
+      // Validate request origin before processing
+      getRpConfigFromRequest(c);
+
       const { opaqueId, displayName } = c.req.valid("json");
 
       // Check if opaque ID already registered
       const existing = getUserByOpaqueId(opaqueId);
       if (existing) {
+        logAuthEvent({
+          timestamp: new Date().toISOString(),
+          level: "warn",
+          event: "zkc_register_fail",
+          ...extractRequestMeta(c),
+          details: { reason: "opaque_id_exists" },
+        });
         throw new ApiException(errors.opaque_id_exists as ApiError, 409);
       }
 
@@ -86,11 +98,21 @@ export const zkcRouter = new Hono()
     "/authenticate",
     zValidator("json", ZkcAuthenticateRequest),
     async (c) => {
+      // Validate request origin before processing
+      getRpConfigFromRequest(c);
+
       const { opaqueId } = c.req.valid("json");
 
       // Find user by opaque ID
       const user = getUserByOpaqueId(opaqueId);
       if (!user) {
+        logAuthEvent({
+          timestamp: new Date().toISOString(),
+          level: "warn",
+          event: "zkc_auth_fail",
+          ...extractRequestMeta(c),
+          details: { reason: "opaque_id_not_found" },
+        });
         throw new ApiException(errors.passkey_not_found as ApiError, 401);
       }
 

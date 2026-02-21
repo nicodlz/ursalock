@@ -3,6 +3,7 @@
  */
 
 import type { ZKCredential } from "@z-base/zero-knowledge-credentials";
+import type { ZKAuthResult } from "./interfaces/auth-provider.js";
 
 /** User object returned by auth */
 export interface User {
@@ -63,8 +64,8 @@ export interface AuthResult {
   error?: string;
 }
 
-// ZKAuthResult is defined in interfaces/auth-provider.ts, re-exported here for convenience
-export type { ZKAuthResult } from "./interfaces/auth-provider.js";
+// Re-export ZKAuthResult for convenience
+export type { ZKAuthResult };
 
 /** API error response */
 export interface ApiError {

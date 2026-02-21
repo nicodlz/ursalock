@@ -19,6 +19,7 @@ export const ErrorCode = z.enum([
   // Vault errors
   "vault_not_found",
   "vault_already_exists",
+  "vault_conflict",
   "invalid_vault_data",
   
   // Validation errors
@@ -66,6 +67,7 @@ export const errors = {
     code: "vault_already_exists",
     message: `Vault "${name}" already exists`,
   }),
+  vault_conflict: { code: "vault_conflict" as const, message: "Version conflict - vault has been modified. Please refresh and retry." },
   invalid_vault_data: { code: "invalid_vault_data" as const, message: "Invalid vault data" },
   
   // Validation errors

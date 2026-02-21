@@ -88,18 +88,53 @@ export type PasskeyLoginVerifyRequest = z.infer<typeof PasskeyLoginVerifyRequest
 // Vault schemas
 // ===================
 
-/** Create vault request */
+/** Maximum encrypted data size (5 MB) */
+const MAX_DATA_SIZE = 5 * 1024 * 1024;
+
+/** Maximum salt length in characters */
+const MAX_SALT_LENGTH = 64;
+
+/** Base64 (standard + url-safe) pattern */
+const BASE64_RE = /^[A-Za-z0-9+/\-_=]*$/;
+
+/** Alphanumeric with hyphens and underscores */
+const VAULT_NAME_RE = /^[A-Za-z0-9_-]+$/;
+
+/**
+ * Create vault request
+ *
+ * NOTE: The `name` field is currently sent in plaintext. In a future version,
+ * clients should send a deterministic hash or client-encrypted value to prevent
+ * metadata leakage on the server. The server will treat the name as an opaque
+ * identifier and the unique constraint (user_id, name) will still apply.
+ */
 export const CreateVaultRequest = z.object({
-  name: z.string().min(1).max(255),
-  data: z.string().max(10 * 1024 * 1024), // Encrypted blob (base64), 10MB limit
-  salt: z.string().max(1024), // Salt (base64)
+  name: z
+    .string()
+    .min(1)
+    .max(255)
+    .regex(VAULT_NAME_RE, "Name must be alphanumeric (hyphens and underscores allowed)"),
+  data: z
+    .string()
+    .max(MAX_DATA_SIZE, `Data must not exceed ${MAX_DATA_SIZE} bytes`)
+    .regex(BASE64_RE, "Data must be valid base64"),
+  salt: z
+    .string()
+    .max(MAX_SALT_LENGTH, `Salt must not exceed ${MAX_SALT_LENGTH} characters`)
+    .regex(BASE64_RE, "Salt must be valid base64"),
 });
 export type CreateVaultRequest = z.infer<typeof CreateVaultRequest>;
 
 /** Update vault request */
 export const UpdateVaultRequest = z.object({
-  data: z.string().max(10 * 1024 * 1024),
-  salt: z.string().max(1024),
+  data: z
+    .string()
+    .max(MAX_DATA_SIZE, `Data must not exceed ${MAX_DATA_SIZE} bytes`)
+    .regex(BASE64_RE, "Data must be valid base64"),
+  salt: z
+    .string()
+    .max(MAX_SALT_LENGTH, `Salt must not exceed ${MAX_SALT_LENGTH} characters`)
+    .regex(BASE64_RE, "Salt must be valid base64"),
   version: z.number().optional(),
 });
 export type UpdateVaultRequest = z.infer<typeof UpdateVaultRequest>;

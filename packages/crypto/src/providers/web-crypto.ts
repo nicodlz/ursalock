@@ -16,20 +16,21 @@ export class WebCryptoProvider implements ICryptoProvider {
   async encrypt(
     plaintext: Uint8Array,
     key: Uint8Array,
-    iv?: Uint8Array
   ): Promise<IEncryptedPayload> {
     // Validate key length
     if (key.length !== 32) {
       throw new Error(`Invalid key length: expected 32 bytes, got ${key.length}`);
     }
 
-    // Generate or use provided IV
-    const actualIv = iv ?? randomBytes(IV_LENGTH);
+    // Always generate a fresh random IV.
+    // Reusing an IV with the same key under AES-GCM completely breaks
+    // confidentiality and authenticity (NIST SP 800-38D §8.3).
+    const actualIv = randomBytes(IV_LENGTH);
 
     // Import key for Web Crypto
     const cryptoKey = await crypto.subtle.importKey(
       'raw',
-      key.buffer.slice(key.byteOffset, key.byteOffset + key.byteLength),
+      (key.buffer as ArrayBuffer).slice(key.byteOffset, key.byteOffset + key.byteLength),
       { name: 'AES-GCM' },
       false,
       ['encrypt']
@@ -40,7 +41,7 @@ export class WebCryptoProvider implements ICryptoProvider {
       await crypto.subtle.encrypt(
         { name: 'AES-GCM', iv: actualIv as Uint8Array<ArrayBuffer> },
         cryptoKey,
-        plaintext.buffer.slice(plaintext.byteOffset, plaintext.byteOffset + plaintext.byteLength)
+        (plaintext.buffer as ArrayBuffer).slice(plaintext.byteOffset, plaintext.byteOffset + plaintext.byteLength)
       )
     );
 
@@ -78,7 +79,7 @@ export class WebCryptoProvider implements ICryptoProvider {
     // Import key for Web Crypto
     const cryptoKey = await crypto.subtle.importKey(
       'raw',
-      key.buffer.slice(key.byteOffset, key.byteOffset + key.byteLength),
+      (key.buffer as ArrayBuffer).slice(key.byteOffset, key.byteOffset + key.byteLength),
       { name: 'AES-GCM' },
       false,
       ['decrypt']
@@ -89,7 +90,7 @@ export class WebCryptoProvider implements ICryptoProvider {
       const plaintext = await crypto.subtle.decrypt(
         { name: 'AES-GCM', iv: iv as Uint8Array<ArrayBuffer> },
         cryptoKey,
-        ciphertext.buffer.slice(ciphertext.byteOffset, ciphertext.byteOffset + ciphertext.byteLength)
+        (ciphertext.buffer as ArrayBuffer).slice(ciphertext.byteOffset, ciphertext.byteOffset + ciphertext.byteLength)
       );
       return new Uint8Array(plaintext);
     } catch (error) {
