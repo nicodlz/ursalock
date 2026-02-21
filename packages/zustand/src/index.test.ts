@@ -217,8 +217,12 @@ describe('vault middleware', () => {
     store.getState().increment()
     store.getState().setText('hello')
 
-    // Wait for persistence (Argon2id takes ~500ms)
-    await new Promise((r) => setTimeout(r, 1000))
+    // Wait for persistence (Argon2id with OWASP high-security params takes ~2-3s)
+    const maxWait = 8000
+    const start = Date.now()
+    while (!mockStorageMap.has('ursalock:persist-test') && Date.now() - start < maxWait) {
+      await new Promise((r) => setTimeout(r, 250))
+    }
 
     // Check storage was updated
     expect(mockStorageMap.has('ursalock:persist-test')).toBe(true)
