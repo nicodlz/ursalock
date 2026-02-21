@@ -6,6 +6,7 @@
 
 import { describe, it, expect, beforeEach } from "vitest";
 import { createApp } from "#app.js";
+import { getCsrfToken, csrfHeaders } from "./test-utils.js";
 
 // Fresh app per test to reset in-memory rate limiter
 let app = createApp();
@@ -13,14 +14,6 @@ let app = createApp();
 beforeEach(() => {
   app = createApp();
 });
-
-/** Get a CSRF token from the app */
-async function getCsrfToken(targetApp = app): Promise<string> {
-  const res = await targetApp.request("/health");
-  const setCookie = res.headers.get("set-cookie") ?? "";
-  const match = setCookie.match(/__csrf=([^;]+)/);
-  return match?.[1] ?? "";
-}
 
 describe("JWT Validation", () => {
   it("rejects requests with no Authorization header", async () => {
@@ -44,7 +37,7 @@ describe("JWT Validation", () => {
 
   it("rejects a valid JWT that has no matching session in DB", async () => {
     // Register to get a valid token, then logout (deletes session), then use the token
-    const csrf1 = await getCsrfToken();
+    const csrf1 = await getCsrfToken(app);
     const regRes = await app.request("/auth/email/register", {
       method: "POST",
       headers: {
@@ -57,7 +50,7 @@ describe("JWT Validation", () => {
     const { token } = await regRes.json();
 
     // Logout — invalidates session
-    const csrf2 = await getCsrfToken();
+    const csrf2 = await getCsrfToken(app);
     await app.request("/auth/logout", {
       method: "POST",
       headers: {
@@ -77,7 +70,7 @@ describe("JWT Validation", () => {
 
 describe("Rate Limiting", () => {
   it("returns rate limit headers on auth endpoints", async () => {
-    const csrf = await getCsrfToken();
+    const csrf = await getCsrfToken(app);
     const res = await app.request("/auth/email/login", {
       method: "POST",
       headers: {

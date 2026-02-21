@@ -6,6 +6,7 @@
 import { createMiddleware } from "hono/factory";
 import { getCookie, setCookie } from "hono/cookie";
 import { ApiException } from "#errors.js";
+import { env } from "#env.js";
 
 /** Cookie name for the CSRF token */
 const CSRF_COOKIE_NAME = "__csrf";
@@ -18,6 +19,16 @@ const TOKEN_BYTES = 32;
 
 /** HTTP methods that are exempt from CSRF validation */
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
+/** Shared cookie options (DRY — used for both set and rotate) */
+function csrfCookieOptions() {
+  return {
+    path: "/",
+    httpOnly: false, // Client JS must read this value
+    sameSite: "Strict" as const,
+    secure: env.NODE_ENV === "production",
+  };
+}
 
 /**
  * Generate a cryptographically random CSRF token.
@@ -41,12 +52,7 @@ export const csrfProtection = createMiddleware(async (c, next) => {
     // Ensure a token cookie exists so the client can read it for subsequent requests
     const existing = getCookie(c, CSRF_COOKIE_NAME);
     if (!existing) {
-      setCookie(c, CSRF_COOKIE_NAME, generateToken(), {
-        path: "/",
-        httpOnly: false, // Client JS must read this value
-        sameSite: "Strict",
-        secure: true,
-      });
+      setCookie(c, CSRF_COOKIE_NAME, generateToken(), csrfCookieOptions());
     }
     return next();
   }
@@ -63,12 +69,7 @@ export const csrfProtection = createMiddleware(async (c, next) => {
   }
 
   // Rotate token after successful validation
-  setCookie(c, CSRF_COOKIE_NAME, generateToken(), {
-    path: "/",
-    httpOnly: false,
-    sameSite: "Strict",
-    secure: true,
-  });
+  setCookie(c, CSRF_COOKIE_NAME, generateToken(), csrfCookieOptions());
 
   await next();
 });

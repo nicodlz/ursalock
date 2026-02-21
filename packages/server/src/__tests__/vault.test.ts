@@ -7,6 +7,7 @@
 
 import { describe, it, expect, beforeEach } from "vitest";
 import { createApp } from "#app.js";
+import { getCsrfToken, csrfHeaders } from "./test-utils.js";
 
 // Fresh app per test to reset in-memory rate limiter
 let app = createApp();
@@ -15,20 +16,9 @@ beforeEach(() => {
   app = createApp();
 });
 
-/**
- * Helper: get a CSRF token from the app by making a GET request.
- * The double-submit cookie pattern requires sending the cookie value as a header.
- */
-async function getCsrfToken(): Promise<string> {
-  const res = await app.request("/health");
-  const setCookie = res.headers.get("set-cookie") ?? "";
-  const match = setCookie.match(/__csrf=([^;]+)/);
-  return match?.[1] ?? "";
-}
-
 /** Helper: register a user and return the auth token */
 async function registerAndGetToken(email = `vault-${crypto.randomUUID()}@test.com`) {
-  const csrf = await getCsrfToken();
+  const csrf = await getCsrfToken(app);
   const res = await app.request("/auth/email/register", {
     method: "POST",
     headers: {
@@ -49,7 +39,7 @@ async function createVault(
   data = "encrypted-blob-base64",
   salt = "salt-base64",
 ) {
-  const csrf = await getCsrfToken();
+  const csrf = await getCsrfToken(app);
   const res = await app.request("/vault", {
     method: "POST",
     headers: {
@@ -124,7 +114,7 @@ describe("Vault CRUD", () => {
   it("updates vault data and salt", async () => {
     const { body: created } = await createVault(token, "update-vault", "old-data", "old-salt");
 
-    const csrf = await getCsrfToken();
+    const csrf = await getCsrfToken(app);
     const res = await app.request(`/vault/${created.uid}`, {
       method: "PUT",
       headers: {
@@ -147,7 +137,7 @@ describe("Vault CRUD", () => {
   it("deletes a vault and confirms it's gone (404)", async () => {
     const { body: created } = await createVault(token, "delete-vault");
 
-    const csrf = await getCsrfToken();
+    const csrf = await getCsrfToken(app);
     const delRes = await app.request(`/vault/${created.uid}`, {
       method: "DELETE",
       headers: {

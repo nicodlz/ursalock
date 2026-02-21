@@ -5,6 +5,7 @@
 
 import { describe, it, expect, beforeEach } from "vitest";
 import { createApp } from "#app.js";
+import { getCsrfToken, csrfHeaders } from "./__tests__/test-utils.js";
 
 let app = createApp();
 
@@ -12,23 +13,9 @@ beforeEach(() => {
   app = createApp();
 });
 
-/** Get a CSRF token by hitting a safe endpoint */
-async function getCsrfToken(): Promise<string> {
-  const res = await app.request("/health");
-  const setCookie = res.headers.get("set-cookie") ?? "";
-  const match = setCookie.match(/__csrf=([^;]+)/);
-  return match?.[1] ?? "";
-}
-
-/** CSRF headers for mutating requests */
-async function csrfHeaders(): Promise<Record<string, string>> {
-  const csrf = await getCsrfToken();
-  return { Cookie: `__csrf=${csrf}`, "X-CSRF-Token": csrf };
-}
-
 /** Register a user and return token */
 async function register(email: string, password = "password123") {
-  const csrf = await csrfHeaders();
+  const csrf = await csrfHeaders(app);
   const res = await app.request("/auth/email/register", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...csrf },
@@ -39,7 +26,7 @@ async function register(email: string, password = "password123") {
 
 /** Login and return token */
 async function login(email: string, password = "password123") {
-  const csrf = await csrfHeaders();
+  const csrf = await csrfHeaders(app);
   const res = await app.request("/auth/email/login", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...csrf },
@@ -151,7 +138,7 @@ describe("Vault CRUD", () => {
   });
 
   async function createVault(name: string, data: string, salt: string) {
-    const csrf = await csrfHeaders();
+    const csrf = await csrfHeaders(app);
     return app.request("/vault", {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...csrf },
@@ -220,7 +207,7 @@ describe("Vault CRUD", () => {
       const createRes = await createVault("update-vault", "old", "s1");
       const { uid } = await createRes.json();
 
-      const csrf = await csrfHeaders();
+      const csrf = await csrfHeaders(app);
       const res = await app.request(`/vault/${uid}`, {
         method: "PUT",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...csrf },
@@ -239,7 +226,7 @@ describe("Vault CRUD", () => {
       const createRes = await createVault("delete-vault", "d", "s");
       const { uid } = await createRes.json();
 
-      const csrf = await csrfHeaders();
+      const csrf = await csrfHeaders(app);
       const res = await app.request(`/vault/${uid}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}`, ...csrf },
