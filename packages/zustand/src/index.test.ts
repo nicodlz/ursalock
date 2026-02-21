@@ -256,10 +256,16 @@ describe('vault middleware', () => {
     )
 
     store.getState().increment()
-    await new Promise((r) => setTimeout(r, 1000))
 
-    // Get raw stored data and decrypt manually
-    const stored = await vaultStorage.getItem('partial-test')
+    // Wait for persistence (Argon2id with OWASP high-security params takes ~2-3s, longer on CI)
+    const maxWait = 8000
+    const start = Date.now()
+    let stored: string | null = null
+    while (!stored && Date.now() - start < maxWait) {
+      await new Promise((r) => setTimeout(r, 250))
+      stored = await vaultStorage.getItem('partial-test')
+    }
+
     expect(stored).not.toBeNull()
     
     const parsed = JSON.parse(stored!)
