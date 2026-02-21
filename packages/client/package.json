@@ -22,6 +22,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@ursalock/crypto": "^0.4.0",
     "@z-base/zero-knowledge-credentials": "^1.0.2"
   },
   "peerDependencies": {
