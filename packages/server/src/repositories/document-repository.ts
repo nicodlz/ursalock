@@ -11,6 +11,7 @@ import {
   updateDocument,
   softDeleteDocument,
   getDocumentsSince,
+  type UpdateDocumentResult,
 } from "#db/client.js";
 
 /**
@@ -55,7 +56,7 @@ export class DocumentRepository implements IDocumentRepository {
       hmac?: string;
       version?: number;
     }
-  ): DocumentEntity | undefined {
+  ): { document?: DocumentEntity; conflict: boolean } {
     return updateDocument(uid, vaultUid, userId, data);
   }
 

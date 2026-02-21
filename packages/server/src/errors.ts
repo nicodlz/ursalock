@@ -58,7 +58,7 @@ export class ApiException extends Error {
   }
 }
 
-/** Error factories - typed specifically for each error */
+/** Static error objects — used directly for errors with fixed messages */
 export const errors = {
   // Auth errors
   unauthorized: { code: "unauthorized" as const, message: "Unauthorized" },
@@ -74,10 +74,6 @@ export const errors = {
   
   // Vault errors
   vault_not_found: { code: "vault_not_found" as const, message: "Vault not found" },
-  vault_already_exists: (name: string): ApiError => ({
-    code: "vault_already_exists",
-    message: `Vault "${name}" already exists`,
-  }),
   vault_conflict: { code: "vault_conflict" as const, message: "Version conflict - vault has been modified. Please refresh and retry." },
   invalid_vault_data: { code: "invalid_vault_data" as const, message: "Invalid vault data" },
   
@@ -87,21 +83,28 @@ export const errors = {
   document_already_exists: { code: "document_already_exists" as const, message: "Document already exists" },
   
   // Validation errors
-  validation_error: (details: string): ApiError => ({
-    code: "validation_error",
-    message: details,
-  }),
   invalid_request: { code: "invalid_request" as const, message: "Invalid request" },
   
   // Server errors
   internal_error: { code: "internal_error" as const, message: "Internal server error" },
+} satisfies Record<string, ApiError>;
+
+/** Builders for errors with dynamic messages — separate from static `errors` */
+export const errorBuilders = {
+  vaultAlreadyExists: (name: string): ApiError => ({
+    code: "vault_already_exists",
+    message: `Vault "${name}" already exists`,
+  }),
+  validationError: (details: string): ApiError => ({
+    code: "validation_error",
+    message: details,
+  }),
 };
 
-/** Helper to get error object from factory */
-export function getError(code: ErrorCode, arg?: string): ApiError {
-  const factory = errors[code];
-  if (typeof factory === "function") {
-    return factory(arg ?? "");
+/** Helper to get error object by code (for middleware that works with codes) */
+export function getError(code: ErrorCode): ApiError {
+  if (code in errors) {
+    return errors[code as keyof typeof errors];
   }
-  return factory as ApiError;
+  return { code, message: code.replace(/_/g, " ") };
 }

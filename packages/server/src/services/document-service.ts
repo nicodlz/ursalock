@@ -36,8 +36,9 @@ export class DocumentService {
   ) {}
 
   /**
-   * Verify vault ownership before any operation
-   * Throws 404 if vault doesn't exist or doesn't belong to user
+   * Verify vault exists and belongs to user.
+   * Only needed for create (to prevent orphan documents referencing non-existent vaults).
+   * Read/update/delete queries already filter by userId — no vault exists = empty result.
    */
   private verifyVaultOwnership(vaultUid: string, userId: number): void {
     const vault = this.vaultRepo.findByUid(vaultUid, userId);
@@ -54,7 +55,7 @@ export class DocumentService {
     vaultUid: string,
     data: { collection: string; data: string; hmac?: string }
   ): DocumentResponse {
-    // Verify vault ownership first
+    // Verify vault exists before creating (prevents orphan documents)
     this.verifyVaultOwnership(vaultUid, userId);
 
     const document = this.documentRepo.create({
@@ -72,9 +73,6 @@ export class DocumentService {
    * Get document by UID
    */
   getDocument(uid: string, vaultUid: string, userId: number): DocumentResponse {
-    // Verify vault ownership first
-    this.verifyVaultOwnership(vaultUid, userId);
-
     const document = this.documentRepo.findByUid(uid, vaultUid, userId);
     if (!document) {
       throw new ApiException(errors.document_not_found, 404);
@@ -96,9 +94,6 @@ export class DocumentService {
       offset?: number;
     }
   ): DocumentListResponse {
-    // Verify vault ownership first
-    this.verifyVaultOwnership(vaultUid, userId);
-
     const documents = this.documentRepo.list(vaultUid, userId, opts);
     return {
       documents: documents.map(toDocumentResponse),
@@ -114,17 +109,10 @@ export class DocumentService {
     userId: number,
     data: { data: string; hmac?: string; version?: number }
   ): DocumentResponse {
-    // Verify vault ownership first
-    this.verifyVaultOwnership(vaultUid, userId);
-
-    const document = this.documentRepo.update(uid, vaultUid, userId, data);
+    const { document, conflict } = this.documentRepo.update(uid, vaultUid, userId, data);
     if (!document) {
-      // If version was provided, check if document exists to distinguish 404 vs 409
-      if (data.version != null) {
-        const existing = this.documentRepo.findByUid(uid, vaultUid, userId);
-        if (existing) {
-          throw new ApiException(errors.document_conflict, 409);
-        }
+      if (conflict) {
+        throw new ApiException(errors.document_conflict, 409);
       }
       throw new ApiException(errors.document_not_found, 404);
     }
@@ -135,9 +123,6 @@ export class DocumentService {
    * Soft delete a document
    */
   deleteDocument(uid: string, vaultUid: string, userId: number): { success: boolean } {
-    // Verify vault ownership first
-    this.verifyVaultOwnership(vaultUid, userId);
-
     const document = this.documentRepo.softDelete(uid, vaultUid, userId);
     if (!document) {
       throw new ApiException(errors.document_not_found, 404);
@@ -149,9 +134,6 @@ export class DocumentService {
    * Delta sync - get documents modified since timestamp
    */
   syncDocuments(vaultUid: string, userId: number, since: number): DocumentSyncResponse {
-    // Verify vault ownership first
-    this.verifyVaultOwnership(vaultUid, userId);
-
     const documents = this.documentRepo.getSince(vaultUid, userId, since);
     return {
       documents: documents.map(toDocumentResponse),

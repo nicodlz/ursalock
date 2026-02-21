@@ -114,9 +114,7 @@ export interface IDocumentRepository {
     }
   ): DocumentEntity[];
 
-  /**
-   * Update a document
-   */
+  /** Result of an update attempt with version conflict detection */
   update(
     uid: string,
     vaultUid: string,
@@ -126,7 +124,7 @@ export interface IDocumentRepository {
       hmac?: string;
       version?: number;
     }
-  ): DocumentEntity | undefined;
+  ): { document?: DocumentEntity; conflict: boolean };
 
   /**
    * Soft delete a document

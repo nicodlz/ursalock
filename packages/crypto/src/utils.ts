@@ -25,6 +25,39 @@ export function constantTimeEqual(a: Uint8Array, b: Uint8Array): boolean {
 }
 
 /**
+ * Encode Uint8Array to base64 string (universal: works in browser + Node.js)
+ */
+export function bytesToBase64(bytes: Uint8Array): string {
+  // Browser path (also works in modern Node.js)
+  if (typeof btoa === 'function') {
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary);
+  }
+  // Node.js fallback
+  return Buffer.from(bytes).toString('base64');
+}
+
+/**
+ * Decode base64 string to Uint8Array (universal: works in browser + Node.js)
+ */
+export function base64ToBytes(base64: string): Uint8Array {
+  // Browser path (also works in modern Node.js)
+  if (typeof atob === 'function') {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes;
+  }
+  // Node.js fallback
+  return new Uint8Array(Buffer.from(base64, 'base64'));
+}
+
+/**
  * Concatenate multiple Uint8Arrays
  */
 export function concatBytes(...arrays: Uint8Array[]): Uint8Array {

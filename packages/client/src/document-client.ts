@@ -41,7 +41,14 @@ export interface DocumentClientOptions {
  * ```
  */
 export class DocumentClient {
-  constructor(private options: DocumentClientOptions) {}
+  constructor(private options: DocumentClientOptions) {
+    if (!options.serverUrl) {
+      throw new Error("DocumentClient: serverUrl is required");
+    }
+    if (!options.vaultUid) {
+      throw new Error("DocumentClient: vaultUid is required");
+    }
+  }
 
   /**
    * Get a typed collection
