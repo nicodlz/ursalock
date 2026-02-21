@@ -2,7 +2,7 @@
   "name": "ursalock",
   "version": "0.0.0",
   "private": true,
-  "packageManager": "pnpm@9.0.0",
+  "packageManager": "npm@10.9.4",
   "type": "module",
   "workspaces": [
     "packages/*"
