@@ -22,6 +22,11 @@ export const ErrorCode = z.enum([
   "vault_conflict",
   "invalid_vault_data",
   
+  // Document errors
+  "document_not_found",
+  "document_conflict",
+  "document_already_exists",
+  
   // Validation errors
   "validation_error",
   "invalid_request",
@@ -69,6 +74,11 @@ export const errors = {
   }),
   vault_conflict: { code: "vault_conflict" as const, message: "Version conflict - vault has been modified. Please refresh and retry." },
   invalid_vault_data: { code: "invalid_vault_data" as const, message: "Invalid vault data" },
+  
+  // Document errors
+  document_not_found: { code: "document_not_found" as const, message: "Document not found" },
+  document_conflict: { code: "document_conflict" as const, message: "Version conflict - document has been modified. Please refresh and retry." },
+  document_already_exists: { code: "document_already_exists" as const, message: "Document already exists" },
   
   // Validation errors
   validation_error: (details: string): ApiError => ({

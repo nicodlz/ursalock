@@ -155,3 +155,61 @@ export const VaultsListResponse = z.object({
   vaults: z.array(VaultResponse),
 });
 export type VaultsListResponse = z.infer<typeof VaultsListResponse>;
+
+// ===================
+// Document schemas
+// ===================
+
+/** Create document request */
+export const CreateDocumentRequest = z.object({
+  collection: z.string().min(1).max(255),
+  data: z
+    .string()
+    .max(MAX_DATA_SIZE, `Data must not exceed ${MAX_DATA_SIZE} bytes`)
+    .regex(BASE64_RE, "Data must be valid base64"),
+  hmac: z
+    .string()
+    .regex(BASE64_RE, "HMAC must be valid base64")
+    .optional(),
+});
+export type CreateDocumentRequest = z.infer<typeof CreateDocumentRequest>;
+
+/** Update document request */
+export const UpdateDocumentRequest = z.object({
+  data: z
+    .string()
+    .max(MAX_DATA_SIZE, `Data must not exceed ${MAX_DATA_SIZE} bytes`)
+    .regex(BASE64_RE, "Data must be valid base64"),
+  hmac: z
+    .string()
+    .regex(BASE64_RE, "HMAC must be valid base64")
+    .optional(),
+  version: z.number().optional(),
+});
+export type UpdateDocumentRequest = z.infer<typeof UpdateDocumentRequest>;
+
+/** Document response */
+export const DocumentResponse = z.object({
+  uid: z.string(),
+  collection: z.string(),
+  data: z.string(),
+  hmac: z.string().nullable(),
+  version: z.number(),
+  createdAt: z.number(),
+  updatedAt: z.number(),
+  deletedAt: z.number().nullable(),
+});
+export type DocumentResponse = z.infer<typeof DocumentResponse>;
+
+/** List documents response */
+export const DocumentListResponse = z.object({
+  documents: z.array(DocumentResponse),
+});
+export type DocumentListResponse = z.infer<typeof DocumentListResponse>;
+
+/** Document sync response */
+export const DocumentSyncResponse = z.object({
+  documents: z.array(DocumentResponse),
+  syncedAt: z.number(),
+});
+export type DocumentSyncResponse = z.infer<typeof DocumentSyncResponse>;

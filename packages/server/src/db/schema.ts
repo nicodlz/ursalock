@@ -62,6 +62,24 @@ export interface Vault {
   updatedAt: number;
 }
 
+/** Document within a vault (individually encrypted) */
+export interface Document {
+  id: number;
+  uid: string;
+  vaultUid: string;
+  userId: number;
+  collection: string;
+  /** Encrypted document data (base64) */
+  data: string;
+  /** HMAC for integrity verification (base64, optional) */
+  hmac: string | null;
+  /** Version for optimistic locking */
+  version: number;
+  createdAt: number;
+  updatedAt: number;
+  deletedAt: number | null;
+}
+
 /** SQL statements for creating tables */
 export const CREATE_TABLES_SQL = `
 -- Users table
@@ -124,4 +142,25 @@ CREATE TABLE IF NOT EXISTS vaults (
 CREATE INDEX IF NOT EXISTS idx_vaults_uid ON vaults(uid);
 CREATE INDEX IF NOT EXISTS idx_vaults_user_id ON vaults(user_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_vaults_user_name ON vaults(user_id, name);
+
+-- Documents table (individually encrypted items within vaults)
+CREATE TABLE IF NOT EXISTS documents (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  uid TEXT NOT NULL UNIQUE DEFAULT (lower(hex(randomblob(16)))),
+  vault_uid TEXT NOT NULL,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  collection TEXT NOT NULL,
+  data TEXT NOT NULL,
+  hmac TEXT,
+  version INTEGER NOT NULL DEFAULT 1,
+  created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+  updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
+  deleted_at INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_documents_vault_uid ON documents(vault_uid);
+CREATE INDEX IF NOT EXISTS idx_documents_user_id ON documents(user_id);
+CREATE INDEX IF NOT EXISTS idx_documents_vault_collection ON documents(vault_uid, collection);
+CREATE INDEX IF NOT EXISTS idx_documents_vault_updated ON documents(vault_uid, updated_at);
+CREATE INDEX IF NOT EXISTS idx_documents_vault_collection_deleted ON documents(vault_uid, collection, deleted_at);
 `;
