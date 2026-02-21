@@ -223,3 +223,44 @@ export const DocumentSyncResponse = z.object({
   syncedAt: z.number(),
 });
 export type DocumentSyncResponse = z.infer<typeof DocumentSyncResponse>;
+
+// ===================
+// API Key schemas
+// ===================
+
+/** Create API key request */
+export const CreateApiKeyRequest = z.object({
+  name: z.string().min(1).max(255),
+  permissions: z.array(z.enum(["read", "write", "delete"])).optional(),
+  vaultUids: z.array(z.string()).optional(),
+  collections: z.array(z.string()).optional(),
+  expiresAt: z.number().optional(),
+});
+export type CreateApiKeyRequest = z.infer<typeof CreateApiKeyRequest>;
+
+/** API key response (without secret) */
+export const ApiKeyResponse = z.object({
+  uid: z.string(),
+  name: z.string(),
+  keyPrefix: z.string(),
+  permissions: z.array(z.string()),
+  vaultUids: z.array(z.string()).nullable(),
+  collections: z.array(z.string()).nullable(),
+  expiresAt: z.number().nullable(),
+  lastUsedAt: z.number().nullable(),
+  createdAt: z.number(),
+  revokedAt: z.number().nullable(),
+});
+export type ApiKeyResponse = z.infer<typeof ApiKeyResponse>;
+
+/** API key created response (includes secret key - only returned once) */
+export const ApiKeyCreatedResponse = ApiKeyResponse.extend({
+  key: z.string(),
+});
+export type ApiKeyCreatedResponse = z.infer<typeof ApiKeyCreatedResponse>;
+
+/** List API keys response */
+export const ApiKeysListResponse = z.object({
+  apiKeys: z.array(ApiKeyResponse),
+});
+export type ApiKeysListResponse = z.infer<typeof ApiKeysListResponse>;

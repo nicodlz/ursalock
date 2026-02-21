@@ -10,7 +10,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { requireAuthMiddleware, type SessionContext } from "#features/auth/middleware.js";
+import { requireAuthMiddleware, requirePermission, requireVaultAccess, assertCollectionAccess, type SessionContext } from "#features/auth/middleware.js";
 import {
   CreateDocumentRequest,
   UpdateDocumentRequest,
@@ -46,42 +46,65 @@ export const documentRouter = new Hono<{
   // List documents in a vault
   .get(
     "/vault/:vaultUid/documents",
+    requirePermission("read"),
+    requireVaultAccess,
     zValidator("query", ListQuerySchema),
     (c) => {
       const session = c.get("session");
       const { vaultUid } = c.req.param();
       const query = c.req.valid("query");
       
-      return c.json(
-        documentService.listDocuments(vaultUid, session.user.id, {
-          collection: query.collection,
-          since: query.since,
-          includeDeleted: query.includeDeleted,
-          limit: query.limit,
-          offset: query.offset,
-        })
-      );
+      // Check collection access if filtering by specific collection
+      if (query.collection) {
+        assertCollectionAccess(session, query.collection);
+      }
+      
+      const result = documentService.listDocuments(vaultUid, session.user.id, {
+        collection: query.collection,
+        since: query.since,
+        includeDeleted: query.includeDeleted,
+        limit: query.limit,
+        offset: query.offset,
+      });
+      
+      // Filter by collection scope when listing all (no specific collection queried)
+      if (!query.collection && session.apiKey?.collections) {
+        const allowed = new Set(session.apiKey.collections);
+        result.documents = result.documents.filter(doc => allowed.has(doc.collection));
+      }
+      
+      return c.json(result);
     },
   )
 
   // Delta sync - get documents modified since timestamp
   .get(
     "/vault/:vaultUid/documents/sync",
+    requirePermission("read"),
+    requireVaultAccess,
     zValidator("query", SyncQuerySchema),
     (c) => {
       const session = c.get("session");
       const { vaultUid } = c.req.param();
       const { since } = c.req.valid("query");
       
-      return c.json(
-        documentService.syncDocuments(vaultUid, session.user.id, since)
-      );
+      const result = documentService.syncDocuments(vaultUid, session.user.id, since);
+      
+      // Filter by collection scope
+      if (session.apiKey?.collections) {
+        const allowed = new Set(session.apiKey.collections);
+        result.documents = result.documents.filter(doc => allowed.has(doc.collection));
+      }
+      
+      return c.json(result);
     },
   )
 
   // Get document by UID
   .get(
     "/vault/:vaultUid/documents/:uid",
+    requirePermission("read"),
+    requireVaultAccess,
     (c) => {
       const session = c.get("session");
       const { vaultUid, uid } = c.req.param();
@@ -95,11 +118,15 @@ export const documentRouter = new Hono<{
   // Create new document
   .post(
     "/vault/:vaultUid/documents",
+    requirePermission("write"),
+    requireVaultAccess,
     zValidator("json", CreateDocumentRequest),
     (c) => {
       const session = c.get("session");
       const { vaultUid } = c.req.param();
       const { collection, data, hmac } = c.req.valid("json");
+      
+      assertCollectionAccess(session, collection);
       
       return c.json(
         documentService.createDocument(session.user.id, vaultUid, {
@@ -115,6 +142,8 @@ export const documentRouter = new Hono<{
   // Update document
   .put(
     "/vault/:vaultUid/documents/:uid",
+    requirePermission("write"),
+    requireVaultAccess,
     zValidator("json", UpdateDocumentRequest),
     (c) => {
       const session = c.get("session");
@@ -134,6 +163,8 @@ export const documentRouter = new Hono<{
   // Delete document (soft delete)
   .delete(
     "/vault/:vaultUid/documents/:uid",
+    requirePermission("delete"),
+    requireVaultAccess,
     (c) => {
       const session = c.get("session");
       const { vaultUid, uid } = c.req.param();

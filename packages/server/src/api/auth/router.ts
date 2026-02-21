@@ -18,10 +18,26 @@ import { env } from "#env.js";
 import {
   EmailRegisterRequest,
   EmailLoginRequest,
+  CreateApiKeyRequest,
   type AuthResponse,
   type MeResponse,
   type RefreshResponse,
+  type ApiKeyCreatedResponse,
+  type ApiKeysListResponse,
 } from "#api/schemas.js";
+import { generateApiKey, getKeyPrefix } from "#features/auth/key-gen.js";
+import { createApiKey, listApiKeysByUserId, revokeApiKey } from "#db/client.js";
+import { parseApiKeyScopes } from "#db/schema.js";
+
+/** Max API keys per user (prevents abuse) */
+const MAX_API_KEYS_PER_USER = 50;
+
+/** Guard: API key management requires JWT auth (not API key auth) */
+function requireJwtSession(session: SessionContext): void {
+  if (session.apiKey) {
+    throw new ApiException(errors.insufficient_permissions, 403);
+  }
+}
 import { passkeyRouter } from "./passkey.js";
 import { zkcRouter } from "./zkc.js";
 
@@ -159,6 +175,103 @@ export const authRouter = new Hono<{
       return c.json({ success: true });
     },
   )
+
+  // ── API key management (JWT auth required) ──
+
+  // Create API key (returns raw key ONCE)
+  .post(
+    "/api-keys",
+    requireAuthMiddleware,
+    zValidator("json", CreateApiKeyRequest),
+    async (c) => {
+      const session = c.get("session");
+      requireJwtSession(session);
+
+      // Rate limit: max keys per user
+      const existing = listApiKeysByUserId(session.user.id);
+      if (existing.length >= MAX_API_KEYS_PER_USER) {
+        throw new ApiException(
+          { code: "rate_limited" as const, message: `Maximum ${MAX_API_KEYS_PER_USER} API keys per user` },
+          429
+        );
+      }
+
+      const input = c.req.valid("json");
+      const key = generateApiKey();
+      const keyHash = hashToken(key);
+
+      const apiKey = createApiKey({
+        userId: session.user.id,
+        name: input.name,
+        keyHash,
+        keyPrefix: getKeyPrefix(key),
+        permissions: input.permissions,
+        vaultUids: input.vaultUids,
+        collections: input.collections,
+        expiresAt: input.expiresAt,
+      });
+
+      const scopes = parseApiKeyScopes(apiKey);
+
+      return c.json({
+        uid: apiKey.uid,
+        name: apiKey.name,
+        key, // Only returned on creation!
+        keyPrefix: apiKey.keyPrefix,
+        ...scopes,
+        expiresAt: apiKey.expiresAt,
+        lastUsedAt: apiKey.lastUsedAt,
+        createdAt: apiKey.createdAt,
+        revokedAt: apiKey.revokedAt,
+      } satisfies ApiKeyCreatedResponse);
+    },
+  )
+
+  // List API keys (metadata only, no secrets)
+  .get(
+    "/api-keys",
+    requireAuthMiddleware,
+    (c) => {
+      const session = c.get("session");
+      requireJwtSession(session);
+
+      const apiKeys = listApiKeysByUserId(session.user.id);
+
+      return c.json({
+        apiKeys: apiKeys.map((key) => {
+          const scopes = parseApiKeyScopes(key);
+          return {
+            uid: key.uid,
+            name: key.name,
+            keyPrefix: key.keyPrefix,
+            ...scopes,
+            expiresAt: key.expiresAt,
+            lastUsedAt: key.lastUsedAt,
+            createdAt: key.createdAt,
+            revokedAt: key.revokedAt,
+          };
+        }),
+      } satisfies ApiKeysListResponse);
+    },
+  )
+
+  // Revoke API key
+  .delete(
+    "/api-keys/:uid",
+    requireAuthMiddleware,
+    (c) => {
+      const session = c.get("session");
+      requireJwtSession(session);
+
+      const uid = c.req.param("uid");
+      if (!revokeApiKey(uid, session.user.id)) {
+        throw new ApiException(errors.api_key_not_found, 404);
+      }
+
+      return c.json({ success: true });
+    },
+  )
+  
   // Mount passkey routes under /auth/passkey/* (legacy)
   .route("/passkey", passkeyRouter)
   // Mount ZKC routes under /auth/zkc/* (new - passkey with PRF)

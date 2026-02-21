@@ -221,7 +221,7 @@ export class Collection<T> {
       version: response.version,
       createdAt: response.createdAt,
       updatedAt: response.updatedAt,
-      deletedAt: response.deletedAt,
+      deletedAt: response.deletedAt ?? undefined,
     };
   }
 
