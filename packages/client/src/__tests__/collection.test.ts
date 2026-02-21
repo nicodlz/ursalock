@@ -7,7 +7,7 @@ import { Collection } from '../collection.js';
 import { DocumentClient } from '../document-client.js';
 import type { IHttpClient } from '../interfaces/http-client.js';
 import type { DocumentResponse } from '../document.js';
-import { randomBytes } from '@ursalock/crypto';
+import { randomBytes, encrypt } from '@ursalock/crypto';
 
 // Test types
 interface TestDocument {
@@ -288,20 +288,28 @@ describe('Collection', () => {
       await expect(collection.get('doc-1')).rejects.toThrow('HMAC verification failed');
     });
 
-    it('throws error when HMAC missing but hmacKey provided', async () => {
+    it('skips HMAC verification when response has no HMAC (backward compat)', async () => {
+      // Documents created before HMAC was enabled have no HMAC tag.
+      // They should still be decryptable (graceful degradation).
+      const plaintext = JSON.stringify({ title: 'Legacy note', content: 'No HMAC' });
+      const encrypted = await encrypt(new TextEncoder().encode(plaintext), encryptionKey);
+      const data = btoa(String.fromCharCode(...encrypted.combined));
+
       const mockResponse: DocumentResponse = {
         uid: 'doc-1',
         collection: 'notes',
-        data: 'some-encrypted-data',
-        // No HMAC!
+        data,
+        hmac: null,
         version: 1,
         createdAt: Date.now(),
         updatedAt: Date.now(),
+        deletedAt: null,
       };
 
       mockHttp.setMockResponse(mockResponse);
 
-      await expect(collection.get('doc-1')).rejects.toThrow('no HMAC in response');
+      const result = await collection.get('doc-1');
+      expect(result.content).toEqual({ title: 'Legacy note', content: 'No HMAC' });
     });
   });
 

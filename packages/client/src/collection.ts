@@ -193,11 +193,8 @@ export class Collection<T> {
    * Decrypt a server response document
    */
   private async decryptDocument(response: DocumentResponse): Promise<Document<T>> {
-    // Verify HMAC if key provided
-    if (this.hmacKey) {
-      if (!response.hmac) {
-        throw new Error("HMAC verification failed: no HMAC in response");
-      }
+    // Verify HMAC if key provided (skip for legacy docs without HMAC)
+    if (this.hmacKey && response.hmac) {
 
       const dataBytes = new TextEncoder().encode(response.data);
       const valid = await verifyHmac(dataBytes, this.hmacKey, response.hmac);

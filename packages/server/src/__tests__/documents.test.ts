@@ -102,11 +102,11 @@ describe("Document CRUD", () => {
       vaultUid,
       "notes",
       "encrypted-note",
-      "hmac-base64"
+      "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
     );
 
     expect(res.status).toBe(201);
-    expect(body.hmac).toBe("hmac-base64");
+    expect(body.hmac).toBe("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2");
   });
 
   it("requires vault ownership to create documents", async () => {
@@ -270,13 +270,13 @@ describe("Document CRUD", () => {
         "Cookie": `__csrf=${csrf}`,
         "X-CSRF-Token": csrf,
       },
-      body: JSON.stringify({ data: "new-data", hmac: "new-hmac" }),
+      body: JSON.stringify({ data: "new-data", hmac: "b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3" }),
     });
 
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.data).toBe("new-data");
-    expect(body.hmac).toBe("new-hmac");
+    expect(body.hmac).toBe("b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3");
     expect(body.version).toBe(2);
   });
 

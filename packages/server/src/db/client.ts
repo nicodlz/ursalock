@@ -464,11 +464,13 @@ export function listDocuments(vaultUid: string, userId: number, opts?: ListDocum
   let query = `SELECT ${DOCUMENT_COLUMNS} FROM documents WHERE ${conditions.join(" AND ")} ORDER BY updated_at DESC`;
 
   if (opts?.limit != null) {
-    query += ` LIMIT ${opts.limit}`;
+    query += ` LIMIT ?`;
+    params.push(opts.limit);
   }
 
   if (opts?.offset != null) {
-    query += ` OFFSET ${opts.offset}`;
+    query += ` OFFSET ?`;
+    params.push(opts.offset);
   }
 
   const stmt = db.prepare(query);
@@ -510,6 +512,11 @@ export function softDeleteDocument(uid: string, vaultUid: string, userId: number
   return stmt.get(uid, vaultUid, userId) as Document | undefined;
 }
 
+/**
+ * Get documents modified since timestamp (for delta sync).
+ * Intentionally includes soft-deleted documents so clients can
+ * detect deletions and remove their local copies.
+ */
 export function getDocumentsSince(vaultUid: string, userId: number, since: number): Document[] {
   const db = getDb();
   const stmt = db.prepare(`

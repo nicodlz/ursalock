@@ -19,11 +19,11 @@ export interface DocumentResponse {
   uid: string;
   collection: string;
   data: string;        // base64 encrypted
-  hmac?: string;
+  hmac: string | null;
   version: number;
   createdAt: number;
   updatedAt: number;
-  deletedAt?: number;
+  deletedAt: number | null;
 }
 
 /** Options for listing documents */
