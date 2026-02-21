@@ -1,6 +1,6 @@
 {
   "name": "@ursalock/client",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Auth and API client for ursalock with E2EE passkey encryption",
   "type": "module",
   "main": "./dist/index.js",
@@ -22,7 +22,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@ursalock/crypto": "^0.4.0",
+    "@ursalock/crypto": "^0.4.2",
     "@z-base/zero-knowledge-credentials": "^1.0.2"
   },
   "peerDependencies": {
