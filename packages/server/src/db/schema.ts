@@ -100,6 +100,22 @@ export interface ApiKey {
   revokedAt: number | null;
 }
 
+/** Parsed API key scopes (deserialized from JSON columns) */
+export interface ApiKeyScopes {
+  permissions: string[];
+  vaultUids: string[] | null;
+  collections: string[] | null;
+}
+
+/** Parse JSON-encoded scope fields from an ApiKey row */
+export function parseApiKeyScopes(key: Pick<ApiKey, "permissions" | "vaultUids" | "collections">): ApiKeyScopes {
+  return {
+    permissions: JSON.parse(key.permissions) as string[],
+    vaultUids: key.vaultUids ? (JSON.parse(key.vaultUids) as string[]) : null,
+    collections: key.collections ? (JSON.parse(key.collections) as string[]) : null,
+  };
+}
+
 /** SQL statements for creating tables */
 export const CREATE_TABLES_SQL = `
 -- Users table

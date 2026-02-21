@@ -10,8 +10,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { requireAuthMiddleware, requirePermission, requireVaultAccess, type SessionContext } from "#features/auth/middleware.js";
-import { ApiException, errors } from "#errors.js";
+import { requireAuthMiddleware, requirePermission, requireVaultAccess, assertCollectionAccess, type SessionContext } from "#features/auth/middleware.js";
 import {
   CreateDocumentRequest,
   UpdateDocumentRequest,
@@ -55,11 +54,9 @@ export const documentRouter = new Hono<{
       const { vaultUid } = c.req.param();
       const query = c.req.valid("query");
       
-      // Check collection access for API key auth
-      if (query.collection && session.apiKey && session.apiKey.collections !== null) {
-        if (!session.apiKey.collections.includes(query.collection)) {
-          throw new ApiException(errors.insufficient_permissions, 403);
-        }
+      // Check collection access if filtering by specific collection
+      if (query.collection) {
+        assertCollectionAccess(session, query.collection);
       }
       
       const result = documentService.listDocuments(vaultUid, session.user.id, {
@@ -70,10 +67,10 @@ export const documentRouter = new Hono<{
         offset: query.offset,
       });
       
-      // Filter documents by collection scope if no specific collection queried
-      if (!query.collection && session.apiKey && session.apiKey.collections !== null) {
-        const allowedCollections = new Set(session.apiKey.collections);
-        result.documents = result.documents.filter(doc => allowedCollections.has(doc.collection));
+      // Filter by collection scope when listing all (no specific collection queried)
+      if (!query.collection && session.apiKey?.collections) {
+        const allowed = new Set(session.apiKey.collections);
+        result.documents = result.documents.filter(doc => allowed.has(doc.collection));
       }
       
       return c.json(result);
@@ -91,9 +88,15 @@ export const documentRouter = new Hono<{
       const { vaultUid } = c.req.param();
       const { since } = c.req.valid("query");
       
-      return c.json(
-        documentService.syncDocuments(vaultUid, session.user.id, since)
-      );
+      const result = documentService.syncDocuments(vaultUid, session.user.id, since);
+      
+      // Filter by collection scope
+      if (session.apiKey?.collections) {
+        const allowed = new Set(session.apiKey.collections);
+        result.documents = result.documents.filter(doc => allowed.has(doc.collection));
+      }
+      
+      return c.json(result);
     },
   )
 
@@ -123,12 +126,7 @@ export const documentRouter = new Hono<{
       const { vaultUid } = c.req.param();
       const { collection, data, hmac } = c.req.valid("json");
       
-      // Check collection access for API key auth
-      if (session.apiKey && session.apiKey.collections !== null) {
-        if (!session.apiKey.collections.includes(collection)) {
-          throw new ApiException(errors.insufficient_permissions, 403);
-        }
-      }
+      assertCollectionAccess(session, collection);
       
       return c.json(
         documentService.createDocument(session.user.id, vaultUid, {

@@ -4,7 +4,7 @@
  */
 
 import { createMiddleware } from "hono/factory";
-import type { User } from "#db/schema.js";
+import { type User, parseApiKeyScopes } from "#db/schema.js";
 import { verifyToken, hashToken } from "#features/auth/jwt.js";
 import { getSessionByTokenHash, getApiKeyByHash, updateApiKeyLastUsed } from "#db/client.js";
 import { getError, ApiException } from "#errors.js";
@@ -12,8 +12,11 @@ import { getError, ApiException } from "#errors.js";
 /** Session context available after authentication */
 export interface SessionContext {
   user: Pick<User, "id" | "uid" | "email">;
+  /** For JWT: session row ID. For API key: api_key row ID. Use authType to distinguish. */
   sessionId: number;
-  /** API key context (only present for API key auth) */
+  /** Authentication method used */
+  authType: "jwt" | "apiKey";
+  /** API key context (only present when authType === "apiKey") */
   apiKey?: {
     uid: string;
     permissions: string[];
@@ -59,6 +62,7 @@ export const optionalAuthMiddleware = createMiddleware<{
       email: session.user.email,
     },
     sessionId: session.id,
+    authType: "jwt",
   });
 
   return next();
@@ -66,7 +70,10 @@ export const optionalAuthMiddleware = createMiddleware<{
 
 /**
  * Required auth middleware - throws if no valid session
- * Tries JWT first, then falls back to API key auth
+ * Tries JWT first, then falls back to API key auth.
+ *
+ * API key lookup is timing-safe: we compare SHA-256 hashes via SQL equality,
+ * so the raw key is never compared directly (no timing oracle).
  */
 export const requireAuthMiddleware = createMiddleware<{
   Variables: { session: SessionContext };
@@ -79,14 +86,14 @@ export const requireAuthMiddleware = createMiddleware<{
 
   const token = authHeader.slice(7);
 
-  // Check if it's an API key (starts with ulk_)
+  // API key auth path (ulk_ prefix)
   if (token.startsWith("ulk_")) {
     // Validate format: ulk_ + 48 hex chars = 52 total
     if (token.length !== 52) {
       throw new ApiException(getError("unauthorized"), 401);
     }
 
-    // Hash and lookup
+    // Hash and lookup — comparing hashes, not raw secrets (timing-safe)
     const keyHash = hashToken(token);
     const keyRecord = getApiKeyByHash(keyHash);
     
@@ -105,21 +112,13 @@ export const requireAuthMiddleware = createMiddleware<{
       throw new ApiException(getError("unauthorized"), 401);
     }
 
-    // Update last used (async, don't block)
+    // Update last used (async, non-blocking — last_used_at is non-critical)
     setImmediate(() => {
-      try {
-        updateApiKeyLastUsed(keyRecord.uid);
-      } catch {
-        // Ignore errors - last_used_at is non-critical
-      }
+      try { updateApiKeyLastUsed(keyRecord.uid); } catch { /* ignore */ }
     });
 
-    // Parse permissions and scopes
-    const permissions = JSON.parse(keyRecord.permissions) as string[];
-    const vaultUids = keyRecord.vaultUids ? (JSON.parse(keyRecord.vaultUids) as string[]) : null;
-    const collections = keyRecord.collections ? (JSON.parse(keyRecord.collections) as string[]) : null;
+    const scopes = parseApiKeyScopes(keyRecord);
 
-    // Set session context
     c.set("session", {
       user: {
         id: keyRecord.user.id,
@@ -127,25 +126,23 @@ export const requireAuthMiddleware = createMiddleware<{
         email: keyRecord.user.email,
       },
       sessionId: keyRecord.id,
+      authType: "apiKey",
       apiKey: {
         uid: keyRecord.uid,
-        permissions,
-        vaultUids,
-        collections,
+        ...scopes,
       },
     });
 
     return next();
   }
 
-  // JWT authentication
+  // JWT auth path
   const payload = await verifyToken(token);
   
   if (!payload?.sub) {
     throw new ApiException(getError("unauthorized"), 401);
   }
 
-  // Verify session exists in DB
   const tokenHash = hashToken(token);
   const session = getSessionByTokenHash(tokenHash);
   
@@ -160,6 +157,7 @@ export const requireAuthMiddleware = createMiddleware<{
       email: session.user.email,
     },
     sessionId: session.id,
+    authType: "jwt",
   });
 
   return next();
@@ -167,8 +165,7 @@ export const requireAuthMiddleware = createMiddleware<{
 
 /**
  * Require permission middleware factory
- * Checks if API key has the required permission
- * JWT users have all permissions by default
+ * JWT users have all permissions by default.
  */
 export const requirePermission = (permission: string) => {
   return createMiddleware<{
@@ -176,12 +173,8 @@ export const requirePermission = (permission: string) => {
   }>(async (c, next) => {
     const session = c.get("session");
     
-    // JWT users have full access
-    if (!session.apiKey) {
-      return next();
-    }
+    if (!session.apiKey) return next();
 
-    // Check API key permission
     if (!session.apiKey.permissions.includes(permission)) {
       throw new ApiException(getError("insufficient_permissions"), 403);
     }
@@ -192,32 +185,21 @@ export const requirePermission = (permission: string) => {
 
 /**
  * Require vault access middleware
- * Checks if API key has access to the requested vault
- * JWT users have access to all their vaults
+ * Checks if API key has access to the requested vault.
+ * JWT users have access to all their vaults.
  */
 export const requireVaultAccess = createMiddleware<{
   Variables: { session: SessionContext };
 }>(async (c, next) => {
   const session = c.get("session");
   
-  // JWT users have full access
-  if (!session.apiKey) {
-    return next();
-  }
+  if (!session.apiKey) return next();
+  if (session.apiKey.vaultUids === null) return next();
 
-  // If vaultUids is null, key has access to all vaults
-  if (session.apiKey.vaultUids === null) {
-    return next();
-  }
-
-  // Get vault UID from request params (different routes use different names)
+  // Different routes use different param names for vault UID
   const vaultUid = c.req.param("vaultUid") ?? c.req.param("uid");
-  if (!vaultUid) {
-    // No vault UID in params - allow (will fail at service layer if needed)
-    return next();
-  }
+  if (!vaultUid) return next(); // No vault param — will fail at service layer
 
-  // Check if API key has access to this vault
   if (!session.apiKey.vaultUids.includes(vaultUid)) {
     throw new ApiException(getError("vault_not_found"), 404);
   }
@@ -226,38 +208,44 @@ export const requireVaultAccess = createMiddleware<{
 });
 
 /**
- * Require collection access middleware
- * Checks if API key has access to the requested collection
- * JWT users have access to all collections
+ * Require collection access middleware factory
+ * Takes a function to extract the collection name from the request context,
+ * avoiding body stream consumption issues.
+ *
+ * For routes where collection comes from query params, use:
+ *   requireCollectionAccess((c) => c.req.query("collection"))
+ *
+ * For routes where collection comes from validated body, check inline
+ * after Zod validation in the handler (body already parsed).
  */
-export const requireCollectionAccess = createMiddleware<{
-  Variables: { session: SessionContext };
-}>(async (c, next) => {
-  const session = c.get("session");
-  
-  // JWT users have full access
-  if (!session.apiKey) {
-    return next();
-  }
+export const requireCollectionAccess = (getCollection: (c: unknown) => string | undefined) => {
+  return createMiddleware<{
+    Variables: { session: SessionContext };
+  }>(async (c, next) => {
+    const session = c.get("session");
+    
+    if (!session.apiKey) return next();
+    if (session.apiKey.collections === null) return next();
 
-  // If collections is null, key has access to all collections
-  if (session.apiKey.collections === null) {
-    return next();
-  }
+    const collection = getCollection(c);
+    if (!collection) return next();
 
-  // Get collection from request body or query
-  const body = await c.req.json().catch(() => null);
-  const collection = body?.collection || c.req.query("collection");
-  
-  if (!collection) {
-    // No collection specified - allow (will fail at service layer if needed)
-    return next();
-  }
+    if (!session.apiKey.collections.includes(collection)) {
+      throw new ApiException(getError("insufficient_permissions"), 403);
+    }
 
-  // Check if API key has access to this collection
+    return next();
+  });
+};
+
+/**
+ * Inline collection scope check for use after Zod body validation.
+ * Call this in handlers where collection comes from the parsed body.
+ */
+export function assertCollectionAccess(session: SessionContext, collection: string): void {
+  if (!session.apiKey) return;
+  if (session.apiKey.collections === null) return;
   if (!session.apiKey.collections.includes(collection)) {
     throw new ApiException(getError("insufficient_permissions"), 403);
   }
-
-  return next();
-});
+}

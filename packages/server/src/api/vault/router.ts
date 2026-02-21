@@ -36,10 +36,12 @@ export const vaultRouter = new Hono<{
       const session = c.get("session");
       const result = vaultService.listVaults(session.user.id);
       
-      // Filter vaults by API key scope (if using API key auth)
-      if (session.apiKey && session.apiKey.vaultUids !== null) {
-        const allowedVaultUids = new Set(session.apiKey.vaultUids);
-        result.vaults = result.vaults.filter(v => allowedVaultUids.has(v.uid));
+      // Filter vaults by API key scope.
+      // In-memory filter is fine here: users have O(10) vaults max.
+      // Move to SQL WHERE uid IN (...) if vault count grows significantly.
+      if (session.apiKey?.vaultUids) {
+        const allowed = new Set(session.apiKey.vaultUids);
+        result.vaults = result.vaults.filter(v => allowed.has(v.uid));
       }
       
       return c.json(result);
@@ -55,11 +57,9 @@ export const vaultRouter = new Hono<{
       const { name } = c.req.param();
       const vault = vaultService.getVaultByName(name, session.user.id);
       
-      // Check vault access for API key auth
-      if (session.apiKey && session.apiKey.vaultUids !== null) {
-        if (!session.apiKey.vaultUids.includes(vault.uid)) {
-          throw new ApiException(errors.vault_not_found, 404);
-        }
+      // Vault scope check (can't use requireVaultAccess — param is :name not :uid)
+      if (session.apiKey?.vaultUids && !session.apiKey.vaultUids.includes(vault.uid)) {
+        throw new ApiException(errors.vault_not_found, 404);
       }
       
       return c.json(vault);

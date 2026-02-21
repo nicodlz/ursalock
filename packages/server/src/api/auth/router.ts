@@ -27,6 +27,17 @@ import {
 } from "#api/schemas.js";
 import { generateApiKey, getKeyPrefix } from "#features/auth/key-gen.js";
 import { createApiKey, listApiKeysByUserId, revokeApiKey } from "#db/client.js";
+import { parseApiKeyScopes } from "#db/schema.js";
+
+/** Max API keys per user (prevents abuse) */
+const MAX_API_KEYS_PER_USER = 50;
+
+/** Guard: API key management requires JWT auth (not API key auth) */
+function requireJwtSession(session: SessionContext): void {
+  if (session.apiKey) {
+    throw new ApiException(errors.insufficient_permissions, 403);
+  }
+}
 import { passkeyRouter } from "./passkey.js";
 import { zkcRouter } from "./zkc.js";
 
@@ -165,7 +176,8 @@ export const authRouter = new Hono<{
     },
   )
 
-  // API key management routes (JWT auth required)
+  // ── API key management (JWT auth required) ──
+
   // Create API key (returns raw key ONCE)
   .post(
     "/api-keys",
@@ -173,44 +185,40 @@ export const authRouter = new Hono<{
     zValidator("json", CreateApiKeyRequest),
     async (c) => {
       const session = c.get("session");
-      
-      // API keys cannot create API keys - must be JWT auth
-      if (session.apiKey) {
-        throw new ApiException(errors.insufficient_permissions, 403);
+      requireJwtSession(session);
+
+      // Rate limit: max keys per user
+      const existing = listApiKeysByUserId(session.user.id);
+      if (existing.length >= MAX_API_KEYS_PER_USER) {
+        throw new ApiException(
+          { code: "rate_limited" as const, message: `Maximum ${MAX_API_KEYS_PER_USER} API keys per user` },
+          429
+        );
       }
 
       const input = c.req.valid("json");
-
-      // Generate API key
       const key = generateApiKey();
-      const keyPrefix = getKeyPrefix(key);
       const keyHash = hashToken(key);
 
-      // Create in DB
       const apiKey = createApiKey({
         userId: session.user.id,
         name: input.name,
         keyHash,
-        keyPrefix,
+        keyPrefix: getKeyPrefix(key),
         permissions: input.permissions,
         vaultUids: input.vaultUids,
         collections: input.collections,
         expiresAt: input.expiresAt,
       });
 
-      // Parse JSON fields for response
-      const permissions = JSON.parse(apiKey.permissions) as string[];
-      const vaultUids = apiKey.vaultUids ? (JSON.parse(apiKey.vaultUids) as string[]) : null;
-      const collections = apiKey.collections ? (JSON.parse(apiKey.collections) as string[]) : null;
+      const scopes = parseApiKeyScopes(apiKey);
 
       return c.json({
         uid: apiKey.uid,
         name: apiKey.name,
         key, // Only returned on creation!
         keyPrefix: apiKey.keyPrefix,
-        permissions,
-        vaultUids,
-        collections,
+        ...scopes,
         expiresAt: apiKey.expiresAt,
         lastUsedAt: apiKey.lastUsedAt,
         createdAt: apiKey.createdAt,
@@ -225,27 +233,24 @@ export const authRouter = new Hono<{
     requireAuthMiddleware,
     (c) => {
       const session = c.get("session");
-      
-      // API keys cannot list API keys - must be JWT auth
-      if (session.apiKey) {
-        throw new ApiException(errors.insufficient_permissions, 403);
-      }
+      requireJwtSession(session);
 
       const apiKeys = listApiKeysByUserId(session.user.id);
 
       return c.json({
-        apiKeys: apiKeys.map((key) => ({
-          uid: key.uid,
-          name: key.name,
-          keyPrefix: key.keyPrefix,
-          permissions: JSON.parse(key.permissions) as string[],
-          vaultUids: key.vaultUids ? (JSON.parse(key.vaultUids) as string[]) : null,
-          collections: key.collections ? (JSON.parse(key.collections) as string[]) : null,
-          expiresAt: key.expiresAt,
-          lastUsedAt: key.lastUsedAt,
-          createdAt: key.createdAt,
-          revokedAt: key.revokedAt,
-        })),
+        apiKeys: apiKeys.map((key) => {
+          const scopes = parseApiKeyScopes(key);
+          return {
+            uid: key.uid,
+            name: key.name,
+            keyPrefix: key.keyPrefix,
+            ...scopes,
+            expiresAt: key.expiresAt,
+            lastUsedAt: key.lastUsedAt,
+            createdAt: key.createdAt,
+            revokedAt: key.revokedAt,
+          };
+        }),
       } satisfies ApiKeysListResponse);
     },
   )
@@ -256,16 +261,10 @@ export const authRouter = new Hono<{
     requireAuthMiddleware,
     (c) => {
       const session = c.get("session");
-      
-      // API keys cannot revoke API keys - must be JWT auth
-      if (session.apiKey) {
-        throw new ApiException(errors.insufficient_permissions, 403);
-      }
+      requireJwtSession(session);
 
       const uid = c.req.param("uid");
-      const revoked = revokeApiKey(uid, session.user.id);
-
-      if (!revoked) {
+      if (!revokeApiKey(uid, session.user.id)) {
         throw new ApiException(errors.api_key_not_found, 404);
       }
 

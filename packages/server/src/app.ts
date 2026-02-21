@@ -15,6 +15,7 @@ import { authRouter } from "#api/auth/router.js";
 import { vaultRouter } from "#api/vault/router.js";
 import { documentRouter } from "#api/document/router.js";
 import { rateLimit } from "#features/auth/rate-limit.js";
+import { deleteExpiredApiKeys } from "#db/client.js";
 import { ApiException, errors, type ApiError } from "#errors.js";
 import { env, getAllowedOrigins } from "#env.js";
 
@@ -106,6 +107,9 @@ export function createApp() {
 
   // Health check
   app.get("/health", (c) => c.json({ status: "ok", timestamp: Date.now() }));
+
+  // Housekeeping: clean up expired API keys on startup (best-effort)
+  try { deleteExpiredApiKeys(); } catch { /* ignore on fresh DB */ }
 
   // Stricter rate limit for auth endpoints
   app.use("/auth/*", rateLimit({ max: 10, windowMs: 60_000 }));
