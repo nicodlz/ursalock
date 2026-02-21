@@ -9,13 +9,14 @@
 
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
-import { requireAuthMiddleware, type SessionContext } from "#features/auth/middleware.js";
+import { requireAuthMiddleware, requirePermission, requireVaultAccess, type SessionContext } from "#features/auth/middleware.js";
 import {
   CreateVaultRequest,
   UpdateVaultRequest,
 } from "#api/schemas.js";
 import { VaultService } from "#services/vault-service.js";
 import { VaultRepository } from "#repositories/vault-repository.js";
+import { ApiException, errors } from "#errors.js";
 
 // Create service with repository (Dependency Injection)
 const vaultRepo = new VaultRepository();
@@ -30,25 +31,46 @@ export const vaultRouter = new Hono<{
   // List all vaults for user
   .get(
     "/",
+    requirePermission("read"),
     (c) => {
       const session = c.get("session");
-      return c.json(vaultService.listVaults(session.user.id));
+      const result = vaultService.listVaults(session.user.id);
+      
+      // Filter vaults by API key scope (if using API key auth)
+      if (session.apiKey && session.apiKey.vaultUids !== null) {
+        const allowedVaultUids = new Set(session.apiKey.vaultUids);
+        result.vaults = result.vaults.filter(v => allowedVaultUids.has(v.uid));
+      }
+      
+      return c.json(result);
     },
   )
 
   // Get vault by name (for sync engine)
   .get(
     "/by-name/:name",
+    requirePermission("read"),
     (c) => {
       const session = c.get("session");
       const { name } = c.req.param();
-      return c.json(vaultService.getVaultByName(name, session.user.id));
+      const vault = vaultService.getVaultByName(name, session.user.id);
+      
+      // Check vault access for API key auth
+      if (session.apiKey && session.apiKey.vaultUids !== null) {
+        if (!session.apiKey.vaultUids.includes(vault.uid)) {
+          throw new ApiException(errors.vault_not_found, 404);
+        }
+      }
+      
+      return c.json(vault);
     },
   )
 
   // Get vault by UID
   .get(
     "/:uid",
+    requirePermission("read"),
+    requireVaultAccess,
     (c) => {
       const session = c.get("session");
       const { uid } = c.req.param();
@@ -59,6 +81,7 @@ export const vaultRouter = new Hono<{
   // Create new vault
   .post(
     "/",
+    requirePermission("write"),
     zValidator("json", CreateVaultRequest),
     (c) => {
       const session = c.get("session");
@@ -73,6 +96,8 @@ export const vaultRouter = new Hono<{
   // Update vault
   .put(
     "/:uid",
+    requirePermission("write"),
+    requireVaultAccess,
     zValidator("json", UpdateVaultRequest),
     (c) => {
       const session = c.get("session");
@@ -87,6 +112,8 @@ export const vaultRouter = new Hono<{
   // Delete vault
   .delete(
     "/:uid",
+    requirePermission("delete"),
+    requireVaultAccess,
     (c) => {
       const session = c.get("session");
       const { uid } = c.req.param();

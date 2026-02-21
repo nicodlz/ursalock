@@ -5,7 +5,7 @@
 
 import Database from "better-sqlite3";
 import { env } from "#env.js";
-import { CREATE_TABLES_SQL, type User, type Passkey, type Session, type Vault, type Document } from "#db/schema.js";
+import { CREATE_TABLES_SQL, type User, type Passkey, type Session, type Vault, type Document, type ApiKey } from "#db/schema.js";
 
 /** Database instance (singleton) */
 let _db: Database.Database | null = null;
@@ -525,4 +525,114 @@ export function getDocumentsSince(vaultUid: string, userId: number, since: numbe
     ORDER BY updated_at DESC
   `);
   return stmt.all(vaultUid, userId, since) as Document[];
+}
+
+// ===================
+// API Key queries
+// ===================
+
+/** Reusable SELECT columns for API key queries (DRY) */
+const API_KEY_COLUMNS = `id, uid, user_id as userId, name, key_hash as keyHash, key_prefix as keyPrefix,
+           permissions, vault_uids as vaultUids, collections, expires_at as expiresAt,
+           last_used_at as lastUsedAt, created_at as createdAt, revoked_at as revokedAt`;
+
+export interface CreateApiKeyInput {
+  userId: number;
+  name: string;
+  keyHash: string;
+  keyPrefix: string;
+  permissions?: string[];
+  vaultUids?: string[];
+  collections?: string[];
+  expiresAt?: number;
+}
+
+export function createApiKey(input: CreateApiKeyInput): ApiKey {
+  const db = getDb();
+  const stmt = db.prepare(`
+    INSERT INTO api_keys (user_id, name, key_hash, key_prefix, permissions, vault_uids, collections, expires_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    RETURNING ${API_KEY_COLUMNS}
+  `);
+  
+  const permissions = input.permissions ? JSON.stringify(input.permissions) : '["read","write"]';
+  const vaultUids = input.vaultUids ? JSON.stringify(input.vaultUids) : null;
+  const collections = input.collections ? JSON.stringify(input.collections) : null;
+  
+  return stmt.get(
+    input.userId,
+    input.name,
+    input.keyHash,
+    input.keyPrefix,
+    permissions,
+    vaultUids,
+    collections,
+    input.expiresAt ?? null
+  ) as ApiKey;
+}
+
+export function getApiKeyByHash(keyHash: string): (ApiKey & { user: User }) | undefined {
+  const db = getDb();
+  const stmt = db.prepare(`
+    SELECT 
+      k.id, k.uid, k.user_id as userId, k.name, k.key_hash as keyHash, k.key_prefix as keyPrefix,
+      k.permissions, k.vault_uids as vaultUids, k.collections, k.expires_at as expiresAt,
+      k.last_used_at as lastUsedAt, k.created_at as createdAt, k.revoked_at as revokedAt,
+      ${USER_JOIN_COLUMNS}
+    FROM api_keys k
+    JOIN users u ON k.user_id = u.id
+    WHERE k.key_hash = ?
+  `);
+  const row = stmt.get(keyHash) as Record<string, unknown> | undefined;
+  if (!row) return undefined;
+
+  return {
+    id: row["id"] as number,
+    uid: row["uid"] as string,
+    userId: row["userId"] as number,
+    name: row["name"] as string,
+    keyHash: row["keyHash"] as string,
+    keyPrefix: row["keyPrefix"] as string,
+    permissions: row["permissions"] as string,
+    vaultUids: (row["vaultUids"] as string | null) ?? null,
+    collections: (row["collections"] as string | null) ?? null,
+    expiresAt: (row["expiresAt"] as number | null) ?? null,
+    lastUsedAt: (row["lastUsedAt"] as number | null) ?? null,
+    createdAt: row["createdAt"] as number,
+    revokedAt: (row["revokedAt"] as number | null) ?? null,
+    user: userFromRow(row),
+  };
+}
+
+export function listApiKeysByUserId(userId: number): Omit<ApiKey, "keyHash">[] {
+  const db = getDb();
+  const stmt = db.prepare(`
+    SELECT id, uid, user_id as userId, name, key_prefix as keyPrefix,
+           permissions, vault_uids as vaultUids, collections, expires_at as expiresAt,
+           last_used_at as lastUsedAt, created_at as createdAt, revoked_at as revokedAt
+    FROM api_keys WHERE user_id = ?
+    ORDER BY created_at DESC
+  `);
+  return stmt.all(userId) as Omit<ApiKey, "keyHash">[];
+}
+
+export function revokeApiKey(uid: string, userId: number): boolean {
+  const db = getDb();
+  const stmt = db.prepare(`
+    UPDATE api_keys SET revoked_at = unixepoch()
+    WHERE uid = ? AND user_id = ? AND revoked_at IS NULL
+  `);
+  return stmt.run(uid, userId).changes > 0;
+}
+
+export function updateApiKeyLastUsed(uid: string): void {
+  const db = getDb();
+  const stmt = db.prepare(`UPDATE api_keys SET last_used_at = unixepoch() WHERE uid = ?`);
+  stmt.run(uid);
+}
+
+export function deleteExpiredApiKeys(): number {
+  const db = getDb();
+  const stmt = db.prepare(`DELETE FROM api_keys WHERE expires_at IS NOT NULL AND expires_at <= unixepoch()`);
+  return stmt.run().changes;
 }

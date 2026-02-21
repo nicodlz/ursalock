@@ -80,6 +80,26 @@ export interface Document {
   deletedAt: number | null;
 }
 
+/** API key for agent/service access */
+export interface ApiKey {
+  id: number;
+  uid: string;
+  userId: number;
+  name: string;
+  keyHash: string;
+  keyPrefix: string;
+  /** JSON array of permission strings: ["read", "write", "delete"] */
+  permissions: string;
+  /** JSON array of vault UIDs (null = all vaults) */
+  vaultUids: string | null;
+  /** JSON array of collection names (null = all collections) */
+  collections: string | null;
+  expiresAt: number | null;
+  lastUsedAt: number | null;
+  createdAt: number;
+  revokedAt: number | null;
+}
+
 /** SQL statements for creating tables */
 export const CREATE_TABLES_SQL = `
 -- Users table
@@ -163,4 +183,24 @@ CREATE INDEX IF NOT EXISTS idx_documents_user_id ON documents(user_id);
 CREATE INDEX IF NOT EXISTS idx_documents_vault_collection ON documents(vault_uid, collection);
 CREATE INDEX IF NOT EXISTS idx_documents_vault_updated ON documents(vault_uid, updated_at);
 CREATE INDEX IF NOT EXISTS idx_documents_vault_collection_deleted ON documents(vault_uid, collection, deleted_at);
+
+-- API keys table (for agent/service access)
+CREATE TABLE IF NOT EXISTS api_keys (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  uid TEXT NOT NULL UNIQUE DEFAULT (lower(hex(randomblob(16)))),
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  key_hash TEXT NOT NULL UNIQUE,
+  key_prefix TEXT NOT NULL,
+  permissions TEXT NOT NULL DEFAULT '["read","write"]',
+  vault_uids TEXT,
+  collections TEXT,
+  expires_at INTEGER,
+  last_used_at INTEGER,
+  created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+  revoked_at INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_api_keys_key_hash ON api_keys(key_hash);
+CREATE INDEX IF NOT EXISTS idx_api_keys_user_id ON api_keys(user_id);
 `;

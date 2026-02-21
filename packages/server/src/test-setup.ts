@@ -13,6 +13,8 @@ beforeEach(() => {
   // Clear all tables (if they exist)
   try {
     db.exec(`
+      DELETE FROM documents;
+      DELETE FROM api_keys;
       DELETE FROM vaults;
       DELETE FROM sessions;
       DELETE FROM passkeys;

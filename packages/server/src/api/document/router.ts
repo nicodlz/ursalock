@@ -10,7 +10,8 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { requireAuthMiddleware, type SessionContext } from "#features/auth/middleware.js";
+import { requireAuthMiddleware, requirePermission, requireVaultAccess, type SessionContext } from "#features/auth/middleware.js";
+import { ApiException, errors } from "#errors.js";
 import {
   CreateDocumentRequest,
   UpdateDocumentRequest,
@@ -46,27 +47,44 @@ export const documentRouter = new Hono<{
   // List documents in a vault
   .get(
     "/vault/:vaultUid/documents",
+    requirePermission("read"),
+    requireVaultAccess,
     zValidator("query", ListQuerySchema),
     (c) => {
       const session = c.get("session");
       const { vaultUid } = c.req.param();
       const query = c.req.valid("query");
       
-      return c.json(
-        documentService.listDocuments(vaultUid, session.user.id, {
-          collection: query.collection,
-          since: query.since,
-          includeDeleted: query.includeDeleted,
-          limit: query.limit,
-          offset: query.offset,
-        })
-      );
+      // Check collection access for API key auth
+      if (query.collection && session.apiKey && session.apiKey.collections !== null) {
+        if (!session.apiKey.collections.includes(query.collection)) {
+          throw new ApiException(errors.insufficient_permissions, 403);
+        }
+      }
+      
+      const result = documentService.listDocuments(vaultUid, session.user.id, {
+        collection: query.collection,
+        since: query.since,
+        includeDeleted: query.includeDeleted,
+        limit: query.limit,
+        offset: query.offset,
+      });
+      
+      // Filter documents by collection scope if no specific collection queried
+      if (!query.collection && session.apiKey && session.apiKey.collections !== null) {
+        const allowedCollections = new Set(session.apiKey.collections);
+        result.documents = result.documents.filter(doc => allowedCollections.has(doc.collection));
+      }
+      
+      return c.json(result);
     },
   )
 
   // Delta sync - get documents modified since timestamp
   .get(
     "/vault/:vaultUid/documents/sync",
+    requirePermission("read"),
+    requireVaultAccess,
     zValidator("query", SyncQuerySchema),
     (c) => {
       const session = c.get("session");
@@ -82,6 +100,8 @@ export const documentRouter = new Hono<{
   // Get document by UID
   .get(
     "/vault/:vaultUid/documents/:uid",
+    requirePermission("read"),
+    requireVaultAccess,
     (c) => {
       const session = c.get("session");
       const { vaultUid, uid } = c.req.param();
@@ -95,11 +115,20 @@ export const documentRouter = new Hono<{
   // Create new document
   .post(
     "/vault/:vaultUid/documents",
+    requirePermission("write"),
+    requireVaultAccess,
     zValidator("json", CreateDocumentRequest),
     (c) => {
       const session = c.get("session");
       const { vaultUid } = c.req.param();
       const { collection, data, hmac } = c.req.valid("json");
+      
+      // Check collection access for API key auth
+      if (session.apiKey && session.apiKey.collections !== null) {
+        if (!session.apiKey.collections.includes(collection)) {
+          throw new ApiException(errors.insufficient_permissions, 403);
+        }
+      }
       
       return c.json(
         documentService.createDocument(session.user.id, vaultUid, {
@@ -115,6 +144,8 @@ export const documentRouter = new Hono<{
   // Update document
   .put(
     "/vault/:vaultUid/documents/:uid",
+    requirePermission("write"),
+    requireVaultAccess,
     zValidator("json", UpdateDocumentRequest),
     (c) => {
       const session = c.get("session");
@@ -134,6 +165,8 @@ export const documentRouter = new Hono<{
   // Delete document (soft delete)
   .delete(
     "/vault/:vaultUid/documents/:uid",
+    requirePermission("delete"),
+    requireVaultAccess,
     (c) => {
       const session = c.get("session");
       const { vaultUid, uid } = c.req.param();

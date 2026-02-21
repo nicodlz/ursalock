@@ -1,0 +1,53 @@
+{
+  "name": "@ursalock/agent",
+  "version": "0.4.0",
+  "description": "Headless Node.js SDK for AI agents to read/write encrypted documents",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ursalock/crypto": "^0.3.1",
+    "@ursalock/client": "^0.3.1"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0"
+  },
+  "keywords": [
+    "agent",
+    "sdk",
+    "e2ee",
+    "encryption",
+    "headless",
+    "nodejs",
+    "ai-agent"
+  ],
+  "license": "MIT",
+  "author": "Nicolas de Luz <ndlz@pm.me>",
+  "homepage": "https://github.com/nicodlz/ursalock#readme",
+  "bugs": {
+    "url": "https://github.com/nicodlz/ursalock/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nicodlz/ursalock.git",
+    "directory": "packages/agent"
+  }
+}

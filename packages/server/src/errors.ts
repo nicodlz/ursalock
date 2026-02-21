@@ -15,6 +15,9 @@ export const ErrorCode = z.enum([
   "passkey_not_found",
   "session_expired",
   "invalid_origin",
+  "api_key_not_found",
+  "api_key_revoked",
+  "insufficient_permissions",
   
   // Vault errors
   "vault_not_found",
@@ -65,6 +68,9 @@ export const errors = {
   passkey_not_found: { code: "passkey_not_found" as const, message: "Passkey not found" },
   session_expired: { code: "session_expired" as const, message: "Session expired" },
   invalid_origin: { code: "invalid_origin" as const, message: "Origin not allowed" },
+  api_key_not_found: { code: "api_key_not_found" as const, message: "API key not found" },
+  api_key_revoked: { code: "api_key_revoked" as const, message: "API key has been revoked" },
+  insufficient_permissions: { code: "insufficient_permissions" as const, message: "Insufficient permissions" },
   
   // Vault errors
   vault_not_found: { code: "vault_not_found" as const, message: "Vault not found" },
