@@ -59,3 +59,13 @@ export {
   useCredential,
   usePasskeySupport,
 } from "./hooks.js";
+
+// Document storage (E2E encrypted collections)
+export { Collection } from "./collection.js";
+export { DocumentClient, type DocumentClientOptions } from "./document-client.js";
+export type {
+  Document,
+  DocumentResponse,
+  ListOptions,
+  SyncResult,
+} from "./document.js";

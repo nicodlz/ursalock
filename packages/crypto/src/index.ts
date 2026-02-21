@@ -39,6 +39,7 @@ export {
 } from "./recovery.js";
 export { randomBytes, constantTimeEqual } from "./utils.js";
 export { computeHmac, verifyHmac } from "./hmac.js";
+export { hkdf, deriveVaultKeys, type VaultKeys } from "./hkdf.js";
 
 // New JWK-based encryption (for ZKCredentials PRF-derived keys)
 export {

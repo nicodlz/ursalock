@@ -13,6 +13,7 @@ import { ZodError } from "zod";
 
 import { authRouter } from "#api/auth/router.js";
 import { vaultRouter } from "#api/vault/router.js";
+import { documentRouter } from "#api/document/router.js";
 import { rateLimit } from "#features/auth/rate-limit.js";
 import { ApiException, errors, type ApiError } from "#errors.js";
 import { env, getAllowedOrigins } from "#env.js";
@@ -112,6 +113,7 @@ export function createApp() {
   // API routes
   app.route("/auth", authRouter);
   app.route("/vault", vaultRouter);
+  app.route("/", documentRouter); // Document routes include vault UID in path
 
   // Error handling
   app.onError(errorHandler);

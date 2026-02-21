@@ -5,7 +5,7 @@
 
 import Database from "better-sqlite3";
 import { env } from "#env.js";
-import { CREATE_TABLES_SQL, type User, type Passkey, type Session, type Vault } from "#db/schema.js";
+import { CREATE_TABLES_SQL, type User, type Passkey, type Session, type Vault, type Document } from "#db/schema.js";
 
 /** Database instance (singleton) */
 let _db: Database.Database | null = null;
@@ -391,4 +391,138 @@ export function deleteVault(uid: string, userId: number): boolean {
   const db = getDb();
   const stmt = db.prepare(`DELETE FROM vaults WHERE uid = ? AND user_id = ?`);
   return stmt.run(uid, userId).changes > 0;
+}
+
+// ===================
+// Document queries
+// ===================
+
+/** Reusable SELECT columns for document queries (DRY) */
+const DOCUMENT_COLUMNS = `id, uid, vault_uid as vaultUid, user_id as userId, collection,
+           data, hmac, version, created_at as createdAt, updated_at as updatedAt, deleted_at as deletedAt`;
+
+export interface CreateDocumentInput {
+  vaultUid: string;
+  userId: number;
+  collection: string;
+  data: string;
+  hmac?: string;
+}
+
+export function createDocument(input: CreateDocumentInput): Document {
+  const db = getDb();
+  const stmt = db.prepare(`
+    INSERT INTO documents (vault_uid, user_id, collection, data, hmac)
+    VALUES (?, ?, ?, ?, ?)
+    RETURNING ${DOCUMENT_COLUMNS}
+  `);
+  return stmt.get(
+    input.vaultUid,
+    input.userId,
+    input.collection,
+    input.data,
+    input.hmac ?? null
+  ) as Document;
+}
+
+export function getDocumentByUid(uid: string, vaultUid: string, userId: number): Document | undefined {
+  const db = getDb();
+  const stmt = db.prepare(`
+    SELECT ${DOCUMENT_COLUMNS}
+    FROM documents WHERE uid = ? AND vault_uid = ? AND user_id = ?
+  `);
+  return stmt.get(uid, vaultUid, userId) as Document | undefined;
+}
+
+export interface ListDocumentsOptions {
+  collection?: string;
+  since?: number;
+  includeDeleted?: boolean;
+  limit?: number;
+  offset?: number;
+}
+
+export function listDocuments(vaultUid: string, userId: number, opts?: ListDocumentsOptions): Document[] {
+  const db = getDb();
+  const conditions: string[] = ["vault_uid = ?", "user_id = ?"];
+  const params: (string | number)[] = [vaultUid, userId];
+
+  if (opts?.collection) {
+    conditions.push("collection = ?");
+    params.push(opts.collection);
+  }
+
+  if (opts?.since != null) {
+    conditions.push("updated_at >= ?");
+    params.push(opts.since);
+  }
+
+  if (!opts?.includeDeleted) {
+    conditions.push("deleted_at IS NULL");
+  }
+
+  let query = `SELECT ${DOCUMENT_COLUMNS} FROM documents WHERE ${conditions.join(" AND ")} ORDER BY updated_at DESC`;
+
+  if (opts?.limit != null) {
+    query += ` LIMIT ?`;
+    params.push(opts.limit);
+  }
+
+  if (opts?.offset != null) {
+    query += ` OFFSET ?`;
+    params.push(opts.offset);
+  }
+
+  const stmt = db.prepare(query);
+  return stmt.all(...params) as Document[];
+}
+
+export interface UpdateDocumentInput {
+  data: string;
+  hmac?: string;
+  version?: number;
+}
+
+export function updateDocument(uid: string, vaultUid: string, userId: number, input: UpdateDocumentInput): Document | undefined {
+  const db = getDb();
+  if (input.version != null) {
+    // Optimistic locking: only update if version matches
+    const stmt = db.prepare(`
+      UPDATE documents SET data = ?, hmac = ?, version = ? + 1, updated_at = unixepoch()
+      WHERE uid = ? AND vault_uid = ? AND user_id = ? AND version = ?
+      RETURNING ${DOCUMENT_COLUMNS}
+    `);
+    return stmt.get(input.data, input.hmac ?? null, input.version, uid, vaultUid, userId, input.version) as Document | undefined;
+  }
+  const stmt = db.prepare(`
+    UPDATE documents SET data = ?, hmac = ?, version = version + 1, updated_at = unixepoch()
+    WHERE uid = ? AND vault_uid = ? AND user_id = ?
+    RETURNING ${DOCUMENT_COLUMNS}
+  `);
+  return stmt.get(input.data, input.hmac ?? null, uid, vaultUid, userId) as Document | undefined;
+}
+
+export function softDeleteDocument(uid: string, vaultUid: string, userId: number): Document | undefined {
+  const db = getDb();
+  const stmt = db.prepare(`
+    UPDATE documents SET deleted_at = unixepoch(), updated_at = unixepoch()
+    WHERE uid = ? AND vault_uid = ? AND user_id = ? AND deleted_at IS NULL
+    RETURNING ${DOCUMENT_COLUMNS}
+  `);
+  return stmt.get(uid, vaultUid, userId) as Document | undefined;
+}
+
+/**
+ * Get documents modified since timestamp (for delta sync).
+ * Intentionally includes soft-deleted documents so clients can
+ * detect deletions and remove their local copies.
+ */
+export function getDocumentsSince(vaultUid: string, userId: number, since: number): Document[] {
+  const db = getDb();
+  const stmt = db.prepare(`
+    SELECT ${DOCUMENT_COLUMNS}
+    FROM documents WHERE vault_uid = ? AND user_id = ? AND updated_at >= ?
+    ORDER BY updated_at DESC
+  `);
+  return stmt.all(vaultUid, userId, since) as Document[];
 }

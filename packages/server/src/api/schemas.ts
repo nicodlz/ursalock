@@ -155,3 +155,71 @@ export const VaultsListResponse = z.object({
   vaults: z.array(VaultResponse),
 });
 export type VaultsListResponse = z.infer<typeof VaultsListResponse>;
+
+// ===================
+// Document schemas
+// ===================
+
+/** Collection name pattern (same constraints as vault names) */
+const COLLECTION_NAME_RE = /^[A-Za-z0-9_-]+$/;
+
+/** HMAC-SHA256 hex string: exactly 64 lowercase hex characters */
+const HMAC_HEX_RE = /^[0-9a-f]{64}$/;
+
+/** Create document request */
+export const CreateDocumentRequest = z.object({
+  collection: z
+    .string()
+    .min(1)
+    .max(255)
+    .regex(COLLECTION_NAME_RE, "Collection name must be alphanumeric (hyphens and underscores allowed)"),
+  data: z
+    .string()
+    .max(MAX_DATA_SIZE, `Data must not exceed ${MAX_DATA_SIZE} bytes`)
+    .regex(BASE64_RE, "Data must be valid base64"),
+  hmac: z
+    .string()
+    .regex(HMAC_HEX_RE, "HMAC must be a valid SHA-256 hex string (64 characters)")
+    .optional(),
+});
+export type CreateDocumentRequest = z.infer<typeof CreateDocumentRequest>;
+
+/** Update document request */
+export const UpdateDocumentRequest = z.object({
+  data: z
+    .string()
+    .max(MAX_DATA_SIZE, `Data must not exceed ${MAX_DATA_SIZE} bytes`)
+    .regex(BASE64_RE, "Data must be valid base64"),
+  hmac: z
+    .string()
+    .regex(HMAC_HEX_RE, "HMAC must be a valid SHA-256 hex string (64 characters)")
+    .optional(),
+  version: z.number().optional(),
+});
+export type UpdateDocumentRequest = z.infer<typeof UpdateDocumentRequest>;
+
+/** Document response */
+export const DocumentResponse = z.object({
+  uid: z.string(),
+  collection: z.string(),
+  data: z.string(),
+  hmac: z.string().nullable(),
+  version: z.number(),
+  createdAt: z.number(),
+  updatedAt: z.number(),
+  deletedAt: z.number().nullable(),
+});
+export type DocumentResponse = z.infer<typeof DocumentResponse>;
+
+/** List documents response */
+export const DocumentListResponse = z.object({
+  documents: z.array(DocumentResponse),
+});
+export type DocumentListResponse = z.infer<typeof DocumentListResponse>;
+
+/** Document sync response */
+export const DocumentSyncResponse = z.object({
+  documents: z.array(DocumentResponse),
+  syncedAt: z.number(),
+});
+export type DocumentSyncResponse = z.infer<typeof DocumentSyncResponse>;
