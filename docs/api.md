@@ -317,14 +317,3 @@ GET /auth/api-keys
 DELETE /auth/api-keys/:uid
   Headers: Authorization: Bearer <token>
   Returns: { success: true }
-```
-
----
-
-## @ursalock/zustand (Deprecated)
-
-:::danger[Deprecated Package]
-`@ursalock/zustand` is **deprecated** due to a critical security bug that sent plaintext data to the server, defeating E2E encryption.
-
-Use `@ursalock/client`'s `DocumentClient` with a plain Zustand store instead. See the [Migration Guide](/guides/migration/).
-:::

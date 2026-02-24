@@ -356,17 +356,7 @@ await collection.replace(uid, data);
 await collection.replace(uid, data, currentVersion);
 ```
 
-## Migration from @ursalock/zustand
+## Next Steps
 
-Old pattern:
-```typescript
-await useStore.vault.sync();
-```
-
-New pattern:
-```typescript
-await pullChanges();
-await pushChanges(useStore.getState());
-```
-
-See the [Migration Guide](/guides/migration/) for full details.
+- [Agent Access](/guides/agent-access/) — Let AI agents sync with your encrypted data
+- [Migration Guide](/guides/migration/) — Migrate from `persist()` to ursalock

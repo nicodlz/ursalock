@@ -121,8 +121,25 @@ useStore.subscribe((state) => {
 | `@ursalock/crypto` | Encryption primitives (AES-256-GCM, HKDF) | ~4 KB |
 | `@ursalock/client` | Auth + DocumentClient + React hooks | ~8 KB |
 | `@ursalock/server` | Self-hosted backend | ~8 KB |
-| `@ursalock/zustand` | **Deprecated** (security bug) | - |
+| `@ursalock/agent` | Agent SDK for AI/bot access | ~3 KB |
 
-:::caution
-`@ursalock/zustand` is deprecated due to a critical security bug that sent plaintext to the server. Use `DocumentClient` with a plain Zustand store instead.
-:::
+## Agent Access
+
+Share derived keys with AI agents so they can read/write your encrypted data:
+
+```typescript
+import { deriveVaultKeys, bytesToBase64 } from "@ursalock/crypto";
+
+// Derive keys from your passkey (done once in the browser)
+const masterKey = base64urlToBytes(cipherJwk.k);
+const keys = await deriveVaultKeys(masterKey, vaultUid);
+
+// Share these with your agent:
+// - API key (created via POST /auth/api-keys, scoped to vault + collection)
+// - bytesToBase64(keys.encryptionKey)
+// - bytesToBase64(keys.hmacKey)
+```
+
+The agent uses `@ursalock/agent` to encrypt/decrypt client-side. The server never sees plaintext.
+
+→ [Agent Access Guide](/guides/agent-access/)

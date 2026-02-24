@@ -76,20 +76,10 @@ The server never sees your encryption key or plaintext data.
 
 ## Why Passkeys?
 
-Traditional E2EE apps require a recovery key:
-```
-ABCD-EFGH-IJKL-MNOP-QRST-UVWX-YZ23-4567
-```
-
-Problems:
-- Users lose it
-- Users store it insecurely
-- Adds friction to onboarding
-
-With passkeys:
-- Your biometric/security key IS the key
+- Your biometric or security key IS the encryption key
 - Synced by your password manager (iCloud, Google, Proton Pass)
-- No separate secret to manage
+- No separate secret to manage or lose
+- One tap to authenticate — no password to type
 
 ## Re-Authentication
 

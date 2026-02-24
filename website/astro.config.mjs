@@ -8,7 +8,7 @@ export default defineConfig({
   integrations: [
     starlight({
       title: "ursalock",
-      description: "End-to-end encrypted cloud sync for Zustand stores",
+      description: "End-to-end encrypted document storage with passkey auth",
       logo: {
         light: "./src/assets/logo-light.svg",
         dark: "./src/assets/logo-dark.svg",
@@ -38,6 +38,7 @@ export default defineConfig({
             { label: "Authentication", slug: "guides/authentication" },
             { label: "Syncing Data", slug: "guides/syncing" },
             { label: "Self-Hosting", slug: "guides/self-hosting" },
+            { label: "Agent Access", slug: "guides/agent-access" },
           ],
         },
         {
@@ -48,7 +49,6 @@ export default defineConfig({
           label: "Security",
           items: [
             { label: "Security Model", slug: "security/model" },
-            { label: "Recovery Key", slug: "security/recovery-key" },
           ],
         },
       ],

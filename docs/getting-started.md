@@ -1,185 +1,92 @@
 # Getting Started
 
-This guide walks you through setting up ursalock in a React application.
-
-## Prerequisites
-
-- Node.js 18+
-- A Zustand store you want to encrypt
-- A ursalock server (see [Self-Hosting](./self-hosting.md)) or use local-only mode
-
 ## Installation
 
 ```bash
-npm install @ursalock/zustand @ursalock/client @ursalock/crypto
+npm install @ursalock/client @ursalock/crypto
 ```
 
-## Step 1: Generate a Recovery Key
+## Setup
 
-The recovery key is the master encryption key for your data. Generate it once and store it safely.
-
-```typescript
-import { generateRecoveryKey } from "@ursalock/crypto";
-
-const recoveryKey = generateRecoveryKey();
-console.log(recoveryKey);
-// => "ABCD-EFGH-IJKL-MNOP-QRST-UVWX-YZ23-4567-ABCD-EFGH-IJKL-MNOP-Q"
-```
-
-Store this key in a password manager or print it as a backup. If you lose it, your data cannot be recovered.
-
-## Step 2: Setup the Auth Client
+### 1. Auth Client
 
 ```typescript
-// lib/vault.ts
 import { VaultClient } from "@ursalock/client";
 
-export const vaultClient = new VaultClient({
+const vaultClient = new VaultClient({
   serverUrl: "https://vault.example.com",
 });
 ```
 
-## Step 3: Create an Encrypted Store
+### 2. Authenticate with Passkey
 
 ```typescript
-// stores/notes.ts
-import { create } from "zustand";
-import { vault } from "@ursalock/zustand";
-import { vaultClient } from "../lib/vault";
+import { useSignIn } from "@ursalock/client";
 
-interface NotesState {
-  notes: string[];
-  addNote: (note: string) => void;
-  removeNote: (index: number) => void;
-}
+const { signIn } = useSignIn(vaultClient);
+const result = await signIn({ usePasskey: true });
 
-export const useNotes = create(
-  vault<NotesState>(
-    (set) => ({
-      notes: [],
-      addNote: (note) => set((s) => ({ notes: [...s.notes, note] })),
-      removeNote: (index) =>
-        set((s) => ({ notes: s.notes.filter((_, i) => i !== index) })),
-    }),
-    {
-      name: "notes",
-      recoveryKey: process.env.NEXT_PUBLIC_RECOVERY_KEY!,
-      server: "https://vault.example.com",
-      getToken: () => vaultClient.getToken(),
-    }
-  )
-);
+// result.credential.cipherJwk → master key
+// result.credential.jwt → auth token
 ```
 
-## Step 4: Add Authentication
+### 3. Create DocumentClient
 
 ```typescript
-// components/AuthGate.tsx
-import { useVaultAuth } from "@ursalock/client";
-import { vaultClient } from "../lib/vault";
+import { DocumentClient } from "@ursalock/client";
+import { deriveVaultKeys } from "@ursalock/crypto";
 
-export function AuthGate({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading, login } = useVaultAuth(vaultClient);
+// Get or create vault
+const res = await vaultClient.fetch("/vault/by-name/my-app");
+const { uid: vaultUid } = await res.json();
 
-  if (isLoading) {
-    return <div>Loading...</div>;
-  }
-
-  if (!isAuthenticated) {
-    return <LoginForm onSubmit={login} />;
-  }
-
-  return <>{children}</>;
+// Derive keys
+function base64urlToBytes(b64url: string): Uint8Array {
+  const b64 = b64url.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = b64 + "=".repeat((4 - (b64.length % 4)) % 4);
+  const binary = atob(padded);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
 }
 
-function LoginForm({ onSubmit }: { onSubmit: (email: string, password: string) => void }) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+const masterKey = base64urlToBytes(credential.cipherJwk.k);
+const keys = await deriveVaultKeys(masterKey, vaultUid);
 
-  return (
-    <form onSubmit={(e) => { e.preventDefault(); onSubmit(email, password); }}>
-      <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-      <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
-      <button type="submit">Login</button>
-    </form>
-  );
-}
+const docClient = new DocumentClient({
+  serverUrl: "https://vault.example.com",
+  vaultUid,
+  encryptionKey: keys.encryptionKey,
+  hmacKey: keys.hmacKey,
+  getAuthHeader: () => vaultClient.getAuthHeader(),
+});
 ```
 
-## Step 5: Use the Store
+### 4. Store Data
 
 ```typescript
-// components/Notes.tsx
-import { useNotes } from "../stores/notes";
+const notes = docClient.collection<Note>("notes");
 
-export function Notes() {
-  const { notes, addNote, removeNote } = useNotes();
-  const [input, setInput] = useState("");
+// Create
+const doc = await notes.create({ title: "Hello", content: "Secret" });
 
-  return (
-    <div>
-      <ul>
-        {notes.map((note, i) => (
-          <li key={i}>
-            {note}
-            <button onClick={() => removeNote(i)}>Delete</button>
-          </li>
-        ))}
-      </ul>
-      <input value={input} onChange={(e) => setInput(e.target.value)} />
-      <button onClick={() => { addNote(input); setInput(""); }}>Add</button>
-    </div>
-  );
-}
+// Read
+const fetched = await notes.get(doc.uid);
+
+// Update
+await notes.replace(doc.uid, { title: "Updated", content: "Still secret" }, doc.version);
+
+// Delete
+await notes.delete(doc.uid);
 ```
 
-## Step 6: Sync Across Devices
+## Self-Hosting
 
-The store syncs automatically every 30 seconds. For manual control:
-
-```typescript
-import { useNotes } from "../stores/notes";
-
-function SyncButton() {
-  const vault = useNotes.vault;
-
-  const handleSync = async () => {
-    await vault.sync();
-  };
-
-  return (
-    <button onClick={handleSync}>
-      Sync Now ({vault.getSyncStatus()})
-    </button>
-  );
-}
+```bash
+docker run -p 3000:3000 \
+  -e JWT_SECRET=your-secret \
+  -v ./data:/app/data \
+  ghcr.io/nicodlz/ursalock-server
 ```
 
-## Local-Only Mode
-
-Don't need cloud sync? Skip the server config:
-
-```typescript
-const useNotes = create(
-  vault<NotesState>(
-    (set) => ({
-      notes: [],
-      addNote: (note) => set((s) => ({ notes: [...s.notes, note] })),
-    }),
-    {
-      name: "notes",
-      recoveryKey: "your-recovery-key",
-      // No server = local encrypted storage only
-    }
-  )
-);
-```
-
-Data is encrypted and stored in localStorage.
-
-## Next Steps
-
-- [API Reference](./api.md) - Full API documentation
-- [Self-Hosting](./self-hosting.md) - Deploy your own server
-- [Migration](./migration.md) - Migrate from `persist()`
-- [Security](./security.md) - Security model details
+See the [full documentation](https://ursalock.ndlz.net) for more.

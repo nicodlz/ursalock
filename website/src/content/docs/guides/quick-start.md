@@ -306,7 +306,7 @@ if (jwt && !hasCipherKey) {
 
 ### Document-Level Storage
 
-Unlike the deprecated `@ursalock/zustand` which stored the entire vault as one blob, the new architecture uses documents:
+The architecture uses individual encrypted documents:
 - Each document is independently encrypted
 - Collections group related documents
 - Optimistic locking prevents conflicts (version field)

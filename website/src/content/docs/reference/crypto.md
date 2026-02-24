@@ -1,87 +1,112 @@
 ---
 title: "@ursalock/crypto"
-description: Encryption primitives API reference
+description: Encryption and key derivation primitives
 ---
 
-Low-level crypto functions. Most users won't need these directly.
+Low-level crypto functions used internally by `@ursalock/client`. Most users only need `deriveVaultKeys` and `bytesToBase64`.
 
-## generateRecoveryKey
+## deriveVaultKeys
 
-Generate a cryptographically secure recovery key.
-
-```typescript
-import { generateRecoveryKey } from "@ursalock/crypto";
-
-const key = generateRecoveryKey();
-// => "ABCD-EFGH-IJKL-MNOP-QRST-UVWX-YZ23-4567-ABCD-EFGH-IJKL-MNOP-Q"
-```
-
-Returns a 256-bit key encoded as a human-readable string.
-
-## validateRecoveryKey
-
-Check if a recovery key is valid.
+Derive vault-specific encryption, HMAC, and index keys from a master key via HKDF.
 
 ```typescript
-import { validateRecoveryKey } from "@ursalock/crypto";
+import { deriveVaultKeys } from "@ursalock/crypto";
 
-validateRecoveryKey("ABCD-EFGH-...");  // true
-validateRecoveryKey("invalid");         // false
-```
+const masterKey = base64urlToBytes(cipherJwk.k); // 32 bytes from passkey PRF
+const keys = await deriveVaultKeys(masterKey, vaultUid);
 
-## encrypt
-
-Encrypt data with a recovery key.
-
-```typescript
-import { encrypt } from "@ursalock/crypto";
-
-const { ciphertext, salt } = await encrypt(
-  "secret data",
-  recoveryKey
-);
+keys.encryptionKey; // Uint8Array(32) — AES-256-GCM encryption
+keys.hmacKey;       // Uint8Array(32) — HMAC-SHA256 integrity
+keys.indexKey;      // Uint8Array(32) — deterministic document indexing
 ```
 
 **Parameters:**
-- `data: string` — Plaintext to encrypt
-- `recoveryKey: string` — Recovery key
+- `masterKey: Uint8Array` — 32-byte master key (from passkey CipherJWK)
+- `vaultUid: string` — Vault UID (used as HKDF context for key separation)
 
-**Returns:**
-- `ciphertext: string` — Encrypted data (base64)
-- `salt: string` — Random salt (base64)
+**Returns:** `VaultKeys` — `{ encryptionKey, hmacKey, indexKey }` (all 32-byte Uint8Arrays)
 
-## decrypt
+This is the key function for setting up a `DocumentClient`. Each vault gets unique derived keys, so compromising one vault's keys doesn't affect others.
 
-Decrypt data with a recovery key.
+## bytesToBase64 / base64ToBytes
 
-```typescript
-import { decrypt } from "@ursalock/crypto";
-
-const plaintext = await decrypt(
-  ciphertext,
-  salt,
-  recoveryKey
-);
-```
-
-**Parameters:**
-- `ciphertext: string` — Encrypted data
-- `salt: string` — Salt from encryption
-- `recoveryKey: string` — Recovery key
-
-**Returns:** `string` — Decrypted plaintext
-
-**Throws:** Error if decryption fails (wrong key or corrupted data)
-
-## deriveKey
-
-Derive an AES key from a recovery key (internal use).
+Convert between Uint8Array and base64 strings.
 
 ```typescript
-import { deriveKey } from "@ursalock/crypto";
+import { bytesToBase64, base64ToBytes } from "@ursalock/crypto";
 
-const aesKey = await deriveKey(recoveryKey, salt);
-// => CryptoKey (AES-256-GCM)
+const b64 = bytesToBase64(keys.encryptionKey);
+// => "aGVsbG8gd29ybGQ..." (standard base64)
+
+const bytes = base64ToBytes(b64);
+// => Uint8Array(32)
 ```
 
-Uses Argon2id with OWASP-recommended parameters.
+Use `bytesToBase64` when you need to share derived keys with an agent (e.g. via the Agent Access UI).
+
+## encrypt / decrypt
+
+AES-256-GCM encryption using Web Crypto API. Used internally by `DocumentClient`.
+
+```typescript
+import { encrypt, decrypt } from "@ursalock/crypto";
+
+// Encrypt
+const plaintext = new TextEncoder().encode(JSON.stringify(data));
+const { combined } = await encrypt(plaintext, key); // combined = iv + ciphertext
+
+// Decrypt
+const decrypted = await decrypt(combined, key);
+const data = JSON.parse(new TextDecoder().decode(decrypted));
+```
+
+- 256-bit key, 96-bit IV (NIST recommended for GCM)
+- 128-bit auth tag (included in ciphertext by Web Crypto)
+
+## encryptWithJwk / decryptWithJwk
+
+Encrypt/decrypt directly with a CipherJWK (used for local storage encryption).
+
+```typescript
+import { encryptWithJwk, decryptWithJwk } from "@ursalock/crypto";
+import type { CipherJWK } from "@ursalock/crypto";
+
+const encrypted = await encryptWithJwk(plaintext, cipherJwk);
+const decrypted = await decryptWithJwk(encrypted.combined, cipherJwk);
+```
+
+## computeHmac / verifyHmac
+
+HMAC-SHA256 for data integrity verification (Encrypt-then-MAC pattern).
+
+```typescript
+import { computeHmac, verifyHmac } from "@ursalock/crypto";
+
+const tag = await computeHmac(data, hmacKey); // hex string
+const valid = await verifyHmac(data, hmacKey, tag); // boolean
+```
+
+Used by the sync engine to detect server-side tampering of encrypted blobs.
+
+## hkdf
+
+Raw HKDF-SHA256 derivation.
+
+```typescript
+import { hkdf } from "@ursalock/crypto";
+
+const derived = await hkdf(inputKey, salt, info, length);
+// => Uint8Array of `length` bytes
+```
+
+`deriveVaultKeys` is a higher-level wrapper around this.
+
+## Types
+
+```typescript
+import type {
+  CipherJWK,      // JWK with 'k' field containing AES key
+  VaultKeys,       // { encryptionKey, hmacKey, indexKey }
+  EncryptedPayload // { iv, ciphertext, combined }
+} from "@ursalock/crypto";
+```
