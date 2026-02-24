@@ -137,37 +137,38 @@ describe("Vault CRUD", () => {
     token = body.token;
   });
 
-  async function createVault(name: string, data: string, salt: string) {
+  async function createVault(name: string) {
     const csrf = await csrfHeaders(app);
     return app.request("/vault", {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...csrf },
-      body: JSON.stringify({ name, data, salt }),
+      body: JSON.stringify({ name }),
     });
   }
 
   describe("POST /vault", () => {
     it("creates a new vault", async () => {
-      const res = await createVault("my-vault", "encrypted-data-base64", "salt-base64");
+      const res = await createVault("my-vault");
 
       expect(res.status).toBe(201);
       const body = await res.json();
       expect(body.uid).toBeDefined();
       expect(body.name).toBe("my-vault");
-      expect(body.data).toBe("encrypted-data-base64");
+      expect(body.data).toBeUndefined();
+      expect(body.salt).toBeUndefined();
     });
 
     it("rejects duplicate vault name", async () => {
-      await createVault("unique-vault", "data1", "salt1");
-      const res = await createVault("unique-vault", "data2", "salt2");
+      await createVault("unique-vault");
+      const res = await createVault("unique-vault");
       expect(res.status).toBe(409);
     });
   });
 
   describe("GET /vault", () => {
     it("lists all user vaults", async () => {
-      await createVault("vault1", "d1", "s1");
-      await createVault("vault2", "d2", "s2");
+      await createVault("vault1");
+      await createVault("vault2");
 
       const res = await app.request("/vault", {
         headers: { Authorization: `Bearer ${token}` },
@@ -181,7 +182,7 @@ describe("Vault CRUD", () => {
 
   describe("GET /vault/:uid", () => {
     it("returns vault by uid", async () => {
-      const createRes = await createVault("get-vault", "data", "salt");
+      const createRes = await createVault("get-vault");
       const { uid } = await createRes.json();
 
       const res = await app.request(`/vault/${uid}`, {
@@ -202,28 +203,9 @@ describe("Vault CRUD", () => {
     });
   });
 
-  describe("PUT /vault/:uid", () => {
-    it("updates vault data", async () => {
-      const createRes = await createVault("update-vault", "old", "s1");
-      const { uid } = await createRes.json();
-
-      const csrf = await csrfHeaders(app);
-      const res = await app.request(`/vault/${uid}`, {
-        method: "PUT",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...csrf },
-        body: JSON.stringify({ data: "new", salt: "s2" }),
-      });
-
-      expect(res.status).toBe(200);
-      const body = await res.json();
-      expect(body.data).toBe("new");
-      expect(body.salt).toBe("s2");
-    });
-  });
-
   describe("DELETE /vault/:uid", () => {
     it("deletes vault", async () => {
-      const createRes = await createVault("delete-vault", "d", "s");
+      const createRes = await createVault("delete-vault");
       const { uid } = await createRes.json();
 
       const csrf = await csrfHeaders(app);
