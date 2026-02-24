@@ -2,102 +2,37 @@
 
 ## @ursalock/crypto
 
-### `generateRecoveryKey()`
+### `deriveVaultKeys(masterKey: Uint8Array, vaultUid: string)`
 
-Generate a cryptographically secure recovery key.
+Derive vault-specific encryption and HMAC keys using HKDF.
 
 ```typescript
-import { generateRecoveryKey } from "@ursalock/crypto";
+import { deriveVaultKeys, base64urlToBytes } from "@ursalock/crypto";
 
-const key = generateRecoveryKey();
-// => "ABCD-EFGH-IJKL-MNOP-QRST-UVWX-YZ23-4567-ABCD-EFGH-IJKL-MNOP-Q"
+const masterKey = base64urlToBytes(cipherJwk.k);
+const keys = await deriveVaultKeys(masterKey, vaultUid);
+// => { encryptionKey: CryptoKey, hmacKey: CryptoKey }
 ```
 
-### `validateRecoveryKey(key: string)`
+### `base64urlToBytes(str: string)`
 
-Validate a recovery key format.
+Convert base64url string to Uint8Array.
 
 ```typescript
-import { validateRecoveryKey } from "@ursalock/crypto";
+import { base64urlToBytes } from "@ursalock/crypto";
 
-validateRecoveryKey("ABCD-EFGH-..."); // => true
-validateRecoveryKey("invalid");       // => false
+const bytes = base64urlToBytes("SGVsbG8");
 ```
 
-### `encrypt(data: string, recoveryKey: string)`
+### `bytesToBase64url(bytes: Uint8Array)`
 
-Encrypt data with a recovery key.
-
-```typescript
-import { encrypt } from "@ursalock/crypto";
-
-const { ciphertext, salt } = await encrypt("secret data", recoveryKey);
-```
-
-### `decrypt(ciphertext: string, salt: string, recoveryKey: string)`
-
-Decrypt data with a recovery key.
+Convert Uint8Array to base64url string.
 
 ```typescript
-import { decrypt } from "@ursalock/crypto";
+import { bytesToBase64url } from "@ursalock/crypto";
 
-const plaintext = await decrypt(ciphertext, salt, recoveryKey);
-```
-
----
-
-## @ursalock/zustand
-
-### `vault(initializer, options)`
-
-Middleware that adds encrypted persistence and cloud sync to a Zustand store.
-
-```typescript
-import { create } from "zustand";
-import { vault } from "@ursalock/zustand";
-
-const useStore = create(
-  vault(
-    (set, get) => ({
-      count: 0,
-      increment: () => set((s) => ({ count: s.count + 1 })),
-    }),
-    {
-      name: "my-store",
-      recoveryKey: "ABCD-EFGH-...",
-      server: "https://vault.example.com",
-      getToken: () => client.getToken(),
-    }
-  )
-);
-```
-
-#### Options
-
-| Option | Type | Required | Default | Description |
-|--------|------|----------|---------|-------------|
-| `name` | `string` | Yes | - | Unique identifier for this vault |
-| `recoveryKey` | `string` | Yes | - | Encryption key |
-| `server` | `string` | No | - | Server URL for cloud sync |
-| `getToken` | `() => string \| null` | No | - | Auth token getter (required if server set) |
-| `partialize` | `(state) => partial` | No | `(s) => s` | Select which state to persist |
-| `merge` | `(persisted, current) => merged` | No | `Object.assign` | How to merge persisted state |
-| `skipHydration` | `boolean` | No | `false` | Skip auto-hydration on init |
-| `syncInterval` | `number` | No | `30000` | Auto-sync interval in ms (0 to disable) |
-
-#### Store Extensions
-
-The middleware adds a `vault` object to the store:
-
-```typescript
-useStore.vault.sync()           // Full bidirectional sync
-useStore.vault.push()           // Push local changes to server
-useStore.vault.pull()           // Pull latest from server
-useStore.vault.rehydrate()      // Reload from local storage
-useStore.vault.hasHydrated()    // Check if hydration complete
-useStore.vault.getSyncStatus()  // "idle" | "syncing" | "synced" | "error" | "offline"
-useStore.vault.hasPendingChanges() // Check offline queue
-useStore.vault.clearStorage()   // Delete all stored data
+const str = bytesToBase64url(new Uint8Array([72, 101, 108, 108, 111]));
+// => "SGVsbG8"
 ```
 
 ---
@@ -111,73 +46,119 @@ Main client for authentication and API access.
 ```typescript
 import { VaultClient } from "@ursalock/client";
 
-const client = new VaultClient({
+const vaultClient = new VaultClient({
   serverUrl: "https://vault.example.com",
-  rpName: "My App",        // For passkeys (optional)
-  preferPasskey: true,     // Prefer passkey over email (optional)
-  storageKey: "my-auth",   // LocalStorage key (optional)
 });
 ```
 
 #### Methods
 
 ```typescript
-// Email auth
-await client.registerEmail(email, password)  // Register new user
-await client.loginEmail(email, password)     // Login existing user
+// Get auth header for API requests
+vaultClient.getAuthHeader()      // => { "Authorization": "Bearer ..." }
 
-// Passkey auth (WebAuthn)
-await client.registerPasskey()               // Register passkey
-await client.loginPasskey()                  // Login with passkey
+// Get raw JWT token
+vaultClient.getToken()           // => "eyJ..." | null
 
-// Session management
-client.getToken()                            // Get current access token
-client.getUser()                             // Get current user
-client.isAuthenticated()                     // Check auth status
-await client.logout()                        // Logout and clear tokens
-await client.refreshToken()                  // Manually refresh token
+// Check authentication status
+vaultClient.isAuthenticated()    // => boolean
 
-// State subscription
-client.subscribe((state) => {
-  console.log(state.isAuthenticated, state.user);
-});
+// Logout and clear session
+await vaultClient.logout()
+
+// Make authenticated requests
+const res = await vaultClient.fetch("/vault/by-name/my-app");
 ```
 
-### `useVaultAuth(client)`
+### React Hooks
 
-React hook for auth state.
+#### `useSignUp(vaultClient)`
 
 ```typescript
-import { useVaultAuth } from "@ursalock/client";
+import { useSignUp } from "@ursalock/client";
 
-function Component() {
-  const {
-    isAuthenticated,
-    isLoading,
-    user,
-    error,
-    login,       // (email, password) => Promise
-    register,    // (email, password) => Promise
-    logout,      // () => Promise
-  } = useVaultAuth(client);
+const { signUp, isLoading, error } = useSignUp(vaultClient);
+
+const result = await signUp({ usePasskey: true });
+if (result.success) {
+  // result.credential.jwt
+  // result.credential.cipherJwk
 }
 ```
 
-### `useVaultSync(store)`
-
-React hook for sync state.
+#### `useSignIn(vaultClient)`
 
 ```typescript
-import { useVaultSync } from "@ursalock/client";
+import { useSignIn } from "@ursalock/client";
 
-function Component() {
-  const {
-    status,          // "idle" | "syncing" | "synced" | "error" | "offline"
-    hasPending,      // boolean
-    sync,            // () => Promise
-    push,            // () => Promise
-    pull,            // () => Promise
-  } = useVaultSync(useMyStore);
+const { signIn, isLoading, error } = useSignIn(vaultClient);
+
+const result = await signIn({ usePasskey: true });
+```
+
+#### `usePasskeySupport(vaultClient)`
+
+```typescript
+import { usePasskeySupport } from "@ursalock/client";
+
+const supportsPasskey = usePasskeySupport(vaultClient);
+```
+
+### `DocumentClient`
+
+Client for encrypted document storage.
+
+```typescript
+import { DocumentClient } from "@ursalock/client";
+
+const docClient = new DocumentClient({
+  serverUrl: "https://vault.example.com",
+  vaultUid: "vault-123",
+  encryptionKey: keys.encryptionKey,
+  hmacKey: keys.hmacKey,
+  getAuthHeader: () => vaultClient.getAuthHeader(),
+});
+```
+
+#### Collections
+
+```typescript
+interface Note {
+  title: string;
+  content: string;
+}
+
+const notes = docClient.collection<Note>("notes");
+
+// Create
+const doc = await notes.create({ title: "Hello", content: "World" });
+
+// Get
+const fetched = await notes.get(doc.uid);
+
+// List
+const allNotes = await notes.list();
+const recent = await notes.list({ since: timestamp, limit: 10 });
+
+// Update (optimistic locking)
+const updated = await notes.replace(doc.uid, newContent, doc.version);
+
+// Delete (soft delete)
+await notes.delete(doc.uid);
+```
+
+#### Document Type
+
+```typescript
+interface Document<T> {
+  uid: string;
+  vaultUid: string;
+  collection: string;
+  content: T;          // Decrypted plaintext
+  version: number;
+  createdAt: number;
+  updatedAt: number;
+  deletedAt?: number;
 }
 ```
 
@@ -211,7 +192,7 @@ server.listen(3000);
 
 ### API Endpoints
 
-#### Auth
+#### Auth Endpoints
 
 ```
 POST /auth/email/register
@@ -235,7 +216,9 @@ POST /auth/logout
   Returns: { success: true }
 ```
 
-#### Vaults
+#### Vault Endpoints
+
+Vaults are containers for documents (no data/salt).
 
 ```
 GET /vault
@@ -244,16 +227,15 @@ GET /vault
 
 POST /vault
   Headers: Authorization: Bearer <token>
-  Body: { name: string, data: string, salt: string }
+  Body: { name: string }
   Returns: { vault: Vault }
 
 GET /vault/:uid
   Headers: Authorization: Bearer <token>
   Returns: { vault: Vault }
 
-PUT /vault/:uid
+GET /vault/by-name/:name
   Headers: Authorization: Bearer <token>
-  Body: { data: string, salt: string }
   Returns: { vault: Vault }
 
 DELETE /vault/:uid
@@ -267,9 +249,82 @@ DELETE /vault/:uid
 interface Vault {
   uid: string;
   name: string;
-  data: string;      // Encrypted blob
-  salt: string;      // Encryption salt
-  version: number;   // For conflict resolution
-  updatedAt: number; // Unix timestamp
+  version: number;
+  updatedAt: number;
 }
 ```
+
+#### Document Endpoints
+
+Documents contain encrypted data within vaults.
+
+```
+POST /vaults/:vaultUid/documents
+  Headers: Authorization: Bearer <token>
+  Body: { collection: string, data: string, hmac?: string }
+  Returns: { document: Document }
+
+GET /vaults/:vaultUid/documents
+  Headers: Authorization: Bearer <token>
+  Query: ?collection=...&since=...&limit=...
+  Returns: { documents: Document[] }
+
+GET /vaults/:vaultUid/documents/:uid
+  Headers: Authorization: Bearer <token>
+  Returns: { document: Document }
+
+PUT /vaults/:vaultUid/documents/:uid
+  Headers: Authorization: Bearer <token>
+  Body: { data: string, hmac?: string, version: number }
+  Returns: { document: Document }
+  Note: Returns 409 if version doesn't match (conflict)
+
+DELETE /vaults/:vaultUid/documents/:uid
+  Headers: Authorization: Bearer <token>
+  Returns: { success: true }
+  Note: Soft delete (sets deletedAt timestamp)
+```
+
+#### Document Object
+
+```typescript
+interface Document {
+  uid: string;
+  vaultUid: string;
+  collection: string;
+  data: string;        // Base64-encoded encrypted ciphertext
+  hmac?: string;       // Optional HMAC for integrity verification
+  version: number;     // For optimistic locking
+  createdAt: number;   // Unix timestamp
+  updatedAt: number;
+  deletedAt?: number;  // Soft delete timestamp
+}
+```
+
+#### API Key Endpoints
+
+```
+POST /auth/api-keys
+  Headers: Authorization: Bearer <token>
+  Body: { name: string, expiresAt?: number }
+  Returns: { uid, name, key, expiresAt, createdAt }
+  Note: The key field is only returned once
+
+GET /auth/api-keys
+  Headers: Authorization: Bearer <token>
+  Returns: { keys: ApiKey[] }
+
+DELETE /auth/api-keys/:uid
+  Headers: Authorization: Bearer <token>
+  Returns: { success: true }
+```
+
+---
+
+## @ursalock/zustand (Deprecated)
+
+:::danger[Deprecated Package]
+`@ursalock/zustand` is **deprecated** due to a critical security bug that sent plaintext data to the server, defeating E2E encryption.
+
+Use `@ursalock/client`'s `DocumentClient` with a plain Zustand store instead. See the [Migration Guide](/guides/migration/).
+:::

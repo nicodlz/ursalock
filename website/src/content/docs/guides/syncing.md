@@ -3,278 +3,370 @@ title: Syncing Data
 description: How sync works, offline support, and conflict resolution
 ---
 
-ursalock syncs your encrypted data between local storage and the server.
+ursalock syncs your encrypted documents between local storage and the server using the DocumentClient API.
 
 ## How Sync Works
 
-1. **Local changes** → encrypted → pushed to server
-2. **Server changes** → pulled → decrypted → merged with local
-3. **Conflict resolution** → Last-Write-Wins (LWW) by timestamp
+1. **Local changes** → encrypted → pushed to server as document updates
+2. **Server changes** → pulled → decrypted → merged with local state
+3. **Conflict resolution** → Optimistic locking with version numbers (409 on conflict)
 
-All data is encrypted client-side before leaving your device.
+All data is encrypted client-side before leaving your device. The server only sees encrypted ciphertext.
 
-## Sync Methods
+## Basic Sync Pattern
 
-### Full Sync
+### Single-Document Sync
 
-```typescript
-await useStore.vault.sync();
-```
-
-Pushes local changes, pulls remote changes, merges using LWW.
-
-### Push Only
+For simple apps, store all state in one document:
 
 ```typescript
-await useStore.vault.push();
-```
+import { DocumentClient } from "@ursalock/client";
+import { useStore } from "./store";
 
-Send local state to server without pulling.
+let docClient: DocumentClient;
+let docUid: string;
+let docVersion: number;
 
-### Pull Only
-
-```typescript
-const hasChanges = await useStore.vault.pull();
-// Returns true if server had newer data
-```
-
-Get latest from server without pushing.
-
-## Auto-Sync
-
-By default, vault syncs every 30 seconds:
-
-```typescript
-vault(storeCreator, {
-  name: "my-store",
-  cipherJwk,
-  server: "https://vault.example.com",
-  getToken: () => token,
-  syncInterval: 30000,  // 30 seconds (default)
-});
-```
-
-Disable auto-sync:
-
-```typescript
-vault(storeCreator, {
-  // ...
-  syncInterval: 0,  // Manual sync only
-});
-```
-
-## Sync Status
-
-```typescript
-const status = useStore.vault.getSyncStatus();
-// "idle" | "syncing" | "synced" | "error" | "offline"
-```
-
-### Status Hook
-
-```tsx
-import { useSyncStatus } from "@ursalock/zustand";
-
-function SyncIndicator({ store }) {
-  const status = useSyncStatus(store);
+export async function initSync(client: DocumentClient) {
+  docClient = client;
+  const collection = client.collection<AppState>("app-state");
   
-  return (
-    <span>
-      {status === "syncing" && "⏳ Syncing..."}
-      {status === "synced" && "✅ Synced"}
-      {status === "error" && "❌ Sync failed"}
-      {status === "offline" && "📴 Offline"}
-      {status === "idle" && "⏸️ Idle"}
-    </span>
-  );
+  // Pull initial state
+  const docs = await collection.list({ limit: 1 });
+  
+  if (docs[0]) {
+    docUid = docs[0].uid;
+    docVersion = docs[0].version;
+    useStore.setState(docs[0].content);
+  } else {
+    // Create initial document
+    const doc = await collection.create(useStore.getState());
+    docUid = doc.uid;
+    docVersion = doc.version;
+  }
+  
+  // Push changes (debounced)
+  let timeout: NodeJS.Timeout;
+  useStore.subscribe((state) => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => pushChanges(state), 1000);
+  });
+}
+
+async function pushChanges(state: AppState) {
+  try {
+    const collection = docClient.collection<AppState>("app-state");
+    const updated = await collection.replace(docUid, state, docVersion);
+    docVersion = updated.version;
+  } catch (error) {
+    if (error.message.includes("409")) {
+      // Conflict - re-pull and merge
+      await pullChanges();
+    }
+  }
+}
+
+export async function pullChanges() {
+  const collection = docClient.collection<AppState>("app-state");
+  const doc = await collection.get(docUid);
+  
+  docVersion = doc.version;
+  useStore.setState(doc.content);
 }
 ```
 
-### Custom Sync Status Component
+### Multi-Document Sync
 
-```tsx
-function SyncStatus() {
-  const [status, setStatus] = useState("idle");
-  
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setStatus(useStore.vault.getSyncStatus());
-    }, 5000); // Poll every 5s
-    
-    return () => clearInterval(interval);
-  }, []);
-  
-  const handleManualSync = async () => {
-    await useStore.vault.sync();
-  };
-  
-  return (
-    <button onClick={handleManualSync}>
-      {status === "syncing" ? "Syncing..." : "Sync Now"}
-    </button>
-  );
+For scalable apps, use collections:
+
+```typescript
+interface Note {
+  id: string;
+  title: string;
+  content: string;
 }
-```
 
-## Conflict Resolution
+const notes = docClient.collection<Note>("notes");
 
-ursalock uses **Last-Write-Wins (LWW)**:
+// Create
+const doc = await notes.create({ id: "1", title: "Hello", content: "World" });
 
-```
-Device A: saves { count: 5 } at 10:00:00
-Device B: saves { count: 8 } at 10:00:05
+// Update
+await notes.replace(doc.uid, { id: "1", title: "Updated", content: "!" }, doc.version);
 
-After sync: { count: 8 } wins (newer timestamp)
-```
-
-### Partialize for Granular Sync
-
-Control which fields are synced:
-
-```typescript
-vault(storeCreator, {
-  name: "my-store",
-  cipherJwk,
-  server: "https://...",
-  getToken: () => token,
-  partialize: (state) => ({
-    // Sync these fields
-    notes: state.notes,
-    settings: state.settings,
-    // Don't sync UI state
-    // currentNoteId: state.currentNoteId, // excluded
-  }),
-});
-```
-
-## Offline Support
-
-When offline:
-1. Changes save to encrypted localStorage
-2. `getSyncStatus()` returns `"offline"`
-3. When back online, call `sync()` to push pending changes
-
-```typescript
-// Check for pending changes
-const pending = useStore.vault.hasPendingChanges();
-
-// Sync when back online
-window.addEventListener("online", () => {
-  useStore.vault.sync();
-});
-```
-
-## Sync on App Lifecycle
-
-Recommended pattern for robust sync:
-
-```tsx
-useEffect(() => {
-  // Sync on app start
-  useStore.vault.sync();
-  
-  // Sync when tab becomes visible
-  const handleVisibility = () => {
-    if (document.visibilityState === "visible") {
-      useStore.vault.sync();
-    }
-  };
-  document.addEventListener("visibilitychange", handleVisibility);
-  
-  // Sync before close
-  const handleUnload = () => {
-    if (useStore.vault.hasPendingChanges()) {
-      useStore.vault.push();
-    }
-  };
-  window.addEventListener("beforeunload", handleUnload);
-  
-  return () => {
-    document.removeEventListener("visibilitychange", handleVisibility);
-    window.removeEventListener("beforeunload", handleUnload);
-  };
-}, []);
+// Sync all
+const allNotes = await notes.list();
+useStore.setState({ notes: allNotes.map(d => d.content) });
 ```
 
 ## Debounced Sync
 
-For frequently changing data (like a text editor), debounce syncs:
+Avoid syncing on every keystroke:
 
 ```typescript
-import { useMemo } from "react";
 import { debounce } from "lodash-es";
 
-function Editor() {
-  const updateNote = useStore((s) => s.updateNote);
-  
-  // Debounce sync after edits
-  const debouncedSync = useMemo(
-    () => debounce(() => useStore.vault.sync(), 3000),
-    []
-  );
-  
-  const handleChange = (content: string) => {
-    updateNote(noteId, { content });
-    debouncedSync();
+const debouncedPush = debounce(async (state: AppState) => {
+  await pushChanges(state);
+}, 2000); // Wait 2s after last change
+
+useStore.subscribe((state) => {
+  debouncedPush(state);
+});
+```
+
+## Conflict Resolution
+
+ursalock uses **optimistic locking** with version numbers:
+
+```typescript
+async function pushChanges(state: AppState) {
+  try {
+    const collection = docClient.collection<AppState>("app-state");
+    const updated = await collection.replace(docUid, state, docVersion);
+    docVersion = updated.version;
+  } catch (error) {
+    if (error.message.includes("409")) {
+      // Conflict: server has a newer version
+      
+      // Strategy 1: Server wins (re-pull)
+      await pullChanges();
+      
+      // Strategy 2: Manual merge
+      const serverDoc = await collection.get(docUid);
+      const merged = mergeStates(state, serverDoc.content);
+      const updated = await collection.replace(docUid, merged, serverDoc.version);
+      docVersion = updated.version;
+    }
+  }
+}
+
+function mergeStates(local: AppState, server: AppState): AppState {
+  // Custom merge logic
+  return {
+    notes: [...new Map([...server.notes, ...local.notes].map(n => [n.id, n])).values()],
+    settings: { ...server.settings, ...local.settings },
   };
-  
-  return <textarea onChange={(e) => handleChange(e.target.value)} />;
 }
 ```
 
-## Server Configuration
+## Offline Support
 
-The server stores encrypted blobs per user:
+Queue changes in localStorage when offline:
 
-```
-POST /api/vault/:name/push
-  Body: { encrypted: "...", updatedAt: 1234567890 }
+```typescript
+interface SyncQueue {
+  pending: Array<{ action: "create" | "update" | "delete"; data: any; uid?: string }>;
+}
+
+const queue: SyncQueue = JSON.parse(localStorage.getItem("sync-queue") || '{"pending":[]}');
+
+async function pushChanges(state: AppState) {
+  if (!navigator.onLine) {
+    // Queue for later
+    queue.pending.push({ action: "update", data: state, uid: docUid });
+    localStorage.setItem("sync-queue", JSON.stringify(queue));
+    return;
+  }
   
-GET /api/vault/:name/pull
-  Response: { encrypted: "...", updatedAt: 1234567890 }
+  // Process queue first
+  while (queue.pending.length > 0) {
+    const item = queue.pending.shift()!;
+    await processQueueItem(item);
+  }
+  localStorage.setItem("sync-queue", JSON.stringify(queue));
+  
+  // Then push current change
+  const collection = docClient.collection<AppState>("app-state");
+  await collection.replace(docUid, state, docVersion);
+}
+
+// Sync when back online
+window.addEventListener("online", () => {
+  pushChanges(useStore.getState());
+});
 ```
 
-See [Self-Hosting](/guides/self-hosting/) for server setup.
+## Sync Status Indicator
 
-## Debugging
+```tsx
+import { useState, useEffect } from "react";
 
-Enable debug logging:
-
-```typescript
-localStorage.setItem("ursalock:debug", "true");
+function SyncIndicator() {
+  const [status, setStatus] = useState<"idle" | "syncing" | "synced" | "error">("idle");
+  const [lastSynced, setLastSynced] = useState<Date | null>(null);
+  
+  const handleSync = async () => {
+    setStatus("syncing");
+    try {
+      await pullChanges();
+      setStatus("synced");
+      setLastSynced(new Date());
+      setTimeout(() => setStatus("idle"), 2000);
+    } catch (error) {
+      setStatus("error");
+    }
+  };
+  
+  return (
+    <div>
+      <button onClick={handleSync}>
+        {status === "syncing" ? "⏳ Syncing..." : "🔄 Sync"}
+      </button>
+      {lastSynced && <span>Last synced: {lastSynced.toLocaleTimeString()}</span>}
+    </div>
+  );
+}
 ```
 
-Check sync state:
+## Periodic Sync
+
+Pull changes periodically:
+
+```tsx
+useEffect(() => {
+  // Pull on app start
+  pullChanges();
+  
+  // Pull every 30s
+  const interval = setInterval(pullChanges, 30000);
+  
+  // Pull when tab becomes visible
+  const handleVisibility = () => {
+    if (document.visibilityState === "visible") {
+      pullChanges();
+    }
+  };
+  document.addEventListener("visibilitychange", handleVisibility);
+  
+  return () => {
+    clearInterval(interval);
+    document.removeEventListener("visibilitychange", handleVisibility);
+  };
+}, []);
+```
+
+## Incremental Sync
+
+Only fetch changed documents:
 
 ```typescript
-console.log({
-  status: useStore.vault.getSyncStatus(),
-  pending: useStore.vault.hasPendingChanges(),
-  hydrated: useStore.vault.hasHydrated(),
+let lastSync = Date.now();
+
+async function syncChanges() {
+  const collection = docClient.collection<Note>("notes");
+  
+  // Only fetch documents updated since last sync
+  const changed = await collection.list({ since: lastSync });
+  
+  if (changed.length > 0) {
+    // Merge into local state
+    const currentNotes = useStore.getState().notes;
+    const updatedNotes = new Map(currentNotes.map(n => [n.id, n]));
+    
+    changed.forEach(doc => {
+      if (doc.deletedAt) {
+        updatedNotes.delete(doc.content.id);
+      } else {
+        updatedNotes.set(doc.content.id, doc.content);
+      }
+    });
+    
+    useStore.setState({ notes: Array.from(updatedNotes.values()) });
+  }
+  
+  lastSync = Date.now();
+}
+```
+
+## Push on App Close
+
+Save changes before closing:
+
+```typescript
+window.addEventListener("beforeunload", (e) => {
+  // Check if there are unsaved changes
+  const hasChanges = checkForUnsavedChanges();
+  
+  if (hasChanges) {
+    // Synchronous push (limited browser support)
+    navigator.sendBeacon("/api/sync", JSON.stringify(data));
+    
+    // Or warn user
+    e.preventDefault();
+    e.returnValue = "You have unsaved changes. Are you sure?";
+  }
+});
+```
+
+## Real-Time Sync (Advanced)
+
+Use Server-Sent Events (SSE) for real-time updates:
+
+```typescript
+const evtSource = new EventSource(`https://vault.example.com/vaults/${vaultUid}/events`, {
+  headers: vaultClient.getAuthHeader(),
+});
+
+evtSource.addEventListener("document-updated", (e) => {
+  const { uid, collection } = JSON.parse(e.data);
+  
+  // Pull the updated document
+  if (collection === "app-state") {
+    pullChanges();
+  }
 });
 ```
 
 ## Common Issues
 
-### "vault_already_exists" Error
+### 409 Conflict Errors
 
-This happens when creating a new vault but one already exists on the server. The client should pull first:
+This means another client updated the document. Re-fetch and retry:
 
 ```typescript
-// On initial load, try pull before push
-await useStore.vault.pull();
+try {
+  await collection.replace(uid, data, version);
+} catch (error) {
+  if (error.message.includes("409")) {
+    const latest = await collection.get(uid);
+    const merged = mergeStates(data, latest.content);
+    await collection.replace(uid, merged, latest.version);
+  }
+}
 ```
-
-### Sync Not Working Across Devices
-
-1. Check passkey provider syncs credentials (iCloud, Google, Proton Pass)
-2. Verify same `opaqueId` on both devices (derived from passkey rawId)
-3. Check server URL is the same
-4. Verify JWT is valid
 
 ### Data Appears Stale
 
+Force a fresh pull:
+
 ```typescript
-// Force a fresh pull from server
-await useStore.vault.pull();
+await pullChanges();
 ```
+
+### Lost Updates
+
+Always use optimistic locking:
+
+```typescript
+// ❌ Bad: No version check
+await collection.replace(uid, data);
+
+// ✅ Good: Version-aware
+await collection.replace(uid, data, currentVersion);
+```
+
+## Migration from @ursalock/zustand
+
+Old pattern:
+```typescript
+await useStore.vault.sync();
+```
+
+New pattern:
+```typescript
+await pullChanges();
+await pushChanges(useStore.getState());
+```
+
+See the [Migration Guide](/guides/migration/) for full details.

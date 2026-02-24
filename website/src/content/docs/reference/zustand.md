@@ -3,6 +3,10 @@ title: "@ursalock/zustand"
 description: Zustand middleware API reference
 ---
 
+:::caution[Deprecated]
+`@ursalock/zustand` is **deprecated** and should not be used. The sync engine had a critical bug that sent **plaintext data** to the server, defeating E2E encryption. Use `@ursalock/client`'s `DocumentClient` with a plain Zustand store instead. See the [Quick Start](/guides/quick-start/) guide.
+:::
+
 Encrypted persistence middleware for Zustand stores.
 
 ## Installation

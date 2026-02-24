@@ -3,8 +3,14 @@ title: Recovery Key (Legacy)
 description: Alternative encryption using a recovery key instead of passkeys
 ---
 
+:::danger[Deprecated]
+This documentation is for the deprecated `@ursalock/zustand` package, which had a critical security bug. The recovery key approach is no longer supported in the current architecture.
+
+Use [passkey-based encryption](/guides/authentication/) with `DocumentClient` instead.
+:::
+
 :::caution
-Recovery keys are the **legacy** approach. New apps should use [passkey-based encryption](/guides/authentication/) for better UX.
+Recovery keys are the **legacy** approach from the old architecture. New apps should use [passkey-based encryption](/guides/authentication/) for better UX and security.
 :::
 
 If you can't use passkeys (no WebAuthn PRF support, need offline-only mode), you can use a recovery key.

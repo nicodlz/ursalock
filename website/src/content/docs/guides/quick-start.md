@@ -3,20 +3,21 @@ title: Quick Start
 description: Get up and running with ursalock in 5 minutes
 ---
 
-This guide walks you through setting up ursalock in a React application with passkey-based E2EE.
+This guide walks you through setting up ursalock in a React application with passkey-based E2EE and document storage.
 
 ## Installation
 
 ```bash
-npm install @ursalock/zustand @ursalock/client @ursalock/crypto
+npm install @ursalock/client @ursalock/crypto zustand
 ```
 
 ## How It Works
 
 1. User authenticates with a **passkey** (WebAuthn)
 2. The passkey derives a **cipherJwk** using WebAuthn PRF extension
-3. Your Zustand store is **encrypted** with this key
-4. Data syncs to the server (encrypted) and across devices
+3. Keys are derived for vault-specific encryption
+4. Your data is encrypted and stored as **documents** in the vault
+5. Changes sync bidirectionally with the server
 
 Same passkey = same encryption key = same data on any device.
 
@@ -31,56 +32,113 @@ export const vaultClient = new VaultClient({
 });
 ```
 
-## 2. Create an Encrypted Store
+## 2. Key Derivation
 
 ```typescript
-// stores/notes.ts
-import { create, type StateCreator } from "zustand";
-import { vault, type VaultOptionsJwk } from "@ursalock/zustand";
+// lib/vault/keys.ts
+import { deriveVaultKeys } from "@ursalock/crypto";
+import { base64urlToBytes } from "@ursalock/crypto";
 import type { CipherJWK } from "@ursalock/crypto";
-import { vaultClient } from "../lib/vault-client";
 
-interface NotesState {
-  notes: string[];
-  addNote: (note: string) => void;
-}
-
-// Store factory - needs cipherJwk from authentication
-export function createNotesStore(cipherJwk: CipherJWK) {
-  const storeCreator: StateCreator<NotesState> = (set) => ({
-    notes: [],
-    addNote: (note) => set((s) => ({ notes: [...s.notes, note] })),
-  });
-
-  const options: VaultOptionsJwk<NotesState> = {
-    name: "my-notes",
-    cipherJwk,
-    server: "https://vault.example.com",
-    getToken: () => {
-      const header = vaultClient.getAuthHeader();
-      return header["Authorization"]?.replace("Bearer ", "") ?? null;
-    },
-    syncInterval: 30000, // Auto-sync every 30s
-  };
-
-  return create(vault(storeCreator, options));
-}
-
-// Store instance - initialized after auth
-let notesStore: ReturnType<typeof createNotesStore> | null = null;
-
-export function initNotesStore(cipherJwk: CipherJWK) {
-  notesStore = createNotesStore(cipherJwk);
-  return notesStore;
-}
-
-export function useNotes<T>(selector: (state: NotesState) => T): T {
-  if (!notesStore) throw new Error("Store not initialized");
-  return notesStore(selector);
+export async function deriveKeys(cipherJwk: CipherJWK, vaultUid: string) {
+  const masterKey = base64urlToBytes(cipherJwk.k);
+  return await deriveVaultKeys(masterKey, vaultUid);
 }
 ```
 
-## 3. Add Authentication
+## 3. Create a Plain Zustand Store
+
+```typescript
+// stores/notes.ts
+import { create } from "zustand";
+
+interface Note {
+  id: string;
+  title: string;
+  content: string;
+}
+
+interface NotesState {
+  notes: Note[];
+  addNote: (note: Note) => void;
+  updateNote: (id: string, updates: Partial<Note>) => void;
+  deleteNote: (id: string) => void;
+}
+
+export const useNotesStore = create<NotesState>((set) => ({
+  notes: [],
+  addNote: (note) => set((s) => ({ notes: [...s.notes, note] })),
+  updateNote: (id, updates) => set((s) => ({
+    notes: s.notes.map((n) => (n.id === id ? { ...n, ...updates } : n)),
+  })),
+  deleteNote: (id) => set((s) => ({ notes: s.notes.filter((n) => n.id !== id) })),
+}));
+```
+
+## 4. Setup Sync Engine
+
+```typescript
+// lib/vault/sync.ts
+import { DocumentClient } from "@ursalock/client";
+import { useNotesStore } from "../../stores/notes";
+
+let docClient: DocumentClient | null = null;
+let docUid: string | null = null;
+let docVersion: number = 1;
+
+export async function initSync(client: DocumentClient) {
+  docClient = client;
+  
+  // Pull initial state
+  const collection = docClient.collection<{ notes: Note[] }>("app-state");
+  const docs = await collection.list({ limit: 1 });
+  
+  if (docs[0]) {
+    docUid = docs[0].uid;
+    docVersion = docs[0].version;
+    useNotesStore.setState(docs[0].content);
+  } else {
+    // Create initial document
+    const doc = await collection.create({ notes: [] });
+    docUid = doc.uid;
+    docVersion = doc.version;
+  }
+  
+  // Subscribe to changes and push (debounced)
+  let timeout: NodeJS.Timeout;
+  useNotesStore.subscribe((state) => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => pushChanges(state), 1000);
+  });
+}
+
+async function pushChanges(state: NotesState) {
+  if (!docClient || !docUid) return;
+  
+  try {
+    const collection = docClient.collection<{ notes: Note[] }>("app-state");
+    const updated = await collection.replace(docUid, { notes: state.notes }, docVersion);
+    docVersion = updated.version;
+  } catch (error) {
+    if (error.message.includes("409")) {
+      // Conflict - re-pull and merge
+      await pullChanges();
+    }
+  }
+}
+
+export async function pullChanges() {
+  if (!docClient || !docUid) return;
+  
+  const collection = docClient.collection<{ notes: Note[] }>("app-state");
+  const doc = await collection.get(docUid);
+  
+  docVersion = doc.version;
+  useNotesStore.setState(doc.content);
+}
+```
+
+## 5. Add Authentication
 
 ```tsx
 // components/Auth.tsx
@@ -119,26 +177,59 @@ export function Auth({ onAuthenticated }: AuthProps) {
 }
 ```
 
-## 4. Wire It Up
+## 6. Wire It Up
 
 ```tsx
 // App.tsx
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { ZKCredential } from "@ursalock/client";
+import { DocumentClient } from "@ursalock/client";
 import { Auth } from "./components/Auth";
 import { Notes } from "./components/Notes";
-import { initNotesStore } from "./stores/notes";
+import { vaultClient } from "./lib/vault-client";
+import { deriveKeys } from "./lib/vault/keys";
+import { initSync } from "./lib/vault/sync";
 
 export function App() {
+  const [isReady, setIsReady] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  const handleAuthenticated = (credential: ZKCredential) => {
-    // Initialize the encrypted store with the derived key
-    initNotesStore(credential.cipherJwk);
+  const handleAuthenticated = async (credential: ZKCredential) => {
+    // 1. Get or create vault
+    const res = await vaultClient.fetch("/vault/by-name/my-notes-app");
+    let vaultData;
+    
+    if (res.status === 404) {
+      const createRes = await vaultClient.fetch("/vault", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "my-notes-app" }),
+      });
+      vaultData = await createRes.json();
+    } else {
+      vaultData = await res.json();
+    }
+    
+    // 2. Derive vault keys
+    const keys = await deriveKeys(credential.cipherJwk, vaultData.uid);
+    
+    // 3. Create DocumentClient
+    const docClient = new DocumentClient({
+      serverUrl: "https://vault.example.com",
+      vaultUid: vaultData.uid,
+      encryptionKey: keys.encryptionKey,
+      hmacKey: keys.hmacKey,
+      getAuthHeader: () => vaultClient.getAuthHeader(),
+    });
+    
+    // 4. Initialize sync
+    await initSync(docClient);
+    
     setIsAuthenticated(true);
+    setIsReady(true);
   };
 
-  if (!isAuthenticated) {
+  if (!isReady) {
     return <Auth onAuthenticated={handleAuthenticated} />;
   }
 
@@ -146,27 +237,36 @@ export function App() {
 }
 ```
 
-## 5. Use the Store
+## 7. Use the Store
 
 ```tsx
 // components/Notes.tsx
 import { useState } from "react";
-import { useNotes } from "../stores/notes";
+import { useNotesStore } from "../stores/notes";
 
 export function Notes() {
-  const notes = useNotes((s) => s.notes);
-  const addNote = useNotes((s) => s.addNote);
+  const notes = useNotesStore((s) => s.notes);
+  const addNote = useNotesStore((s) => s.addNote);
   const [input, setInput] = useState("");
+
+  const handleAdd = () => {
+    addNote({
+      id: crypto.randomUUID(),
+      title: input,
+      content: "",
+    });
+    setInput("");
+  };
 
   return (
     <div>
       <ul>
-        {notes.map((note, i) => (
-          <li key={i}>{note}</li>
+        {notes.map((note) => (
+          <li key={note.id}>{note.title}</li>
         ))}
       </ul>
       <input value={input} onChange={(e) => setInput(e.target.value)} />
-      <button onClick={() => { addNote(input); setInput(""); }}>Add</button>
+      <button onClick={handleAdd}>Add Note</button>
     </div>
   );
 }
@@ -174,16 +274,24 @@ export function Notes() {
 
 ## Key Concepts
 
-### Passkey = Encryption Key
+### Passkey = Master Key
 
 The `cipherJwk` is derived from your passkey using the WebAuthn PRF extension. This means:
 - **No recovery key to store** — your passkey IS the key
 - **Same passkey = same data** — works across devices with synced passkeys
 - **Zero-knowledge** — server never sees your plaintext data
 
+### Vault-Specific Encryption
+
+Keys are derived per-vault using HKDF:
+```typescript
+const keys = await deriveVaultKeys(masterKey, vaultUid);
+// Each vault has unique encryption and HMAC keys
+```
+
 ### Re-authentication on Refresh
 
-After a page refresh, the `cipherJwk` is lost (it lives only in memory for security). The user must re-authenticate with their passkey to derive the key again.
+After a page refresh, the `cipherJwk` is lost (it lives only in memory for security). The user must re-authenticate with their passkey to derive the keys again.
 
 ```tsx
 // Detect if we need to re-auth
@@ -196,31 +304,32 @@ if (jwt && !hasCipherKey) {
 }
 ```
 
-### Sync Status
+### Document-Level Storage
 
+Unlike the deprecated `@ursalock/zustand` which stored the entire vault as one blob, the new architecture uses documents:
+- Each document is independently encrypted
+- Collections group related documents
+- Optimistic locking prevents conflicts (version field)
+- Efficient syncing (only changed documents)
+
+### Single vs Multi-Document Patterns
+
+**Single Document (simple apps):**
 ```typescript
-// Check sync status
-const status = useStore.vault.getSyncStatus();
-// "idle" | "syncing" | "synced" | "error" | "offline"
-
-// Manual sync
-await useStore.vault.sync();
+// Store entire state in one document
+const collection = docClient.collection<AppState>("app-state");
+await collection.replace(docUid, store.getState(), version);
 ```
 
-## Local-Only Mode
-
-Don't need cloud sync? Skip the server config:
-
+**Multi-Document (scalable apps):**
 ```typescript
-const options: VaultOptionsJwk<NotesState> = {
-  name: "my-notes",
-  cipherJwk,
-  // No server = encrypted localStorage only
-};
+// Each note is a separate document
+const notes = docClient.collection<Note>("notes");
+await notes.create({ title: "...", content: "..." });
 ```
 
 ## Next Steps
 
-- [Authentication](/guides/authentication/) — Passkey flows, hooks, error handling
 - [Syncing](/guides/syncing/) — Conflict resolution, offline support
+- [Client Reference](/reference/client/) — Full DocumentClient API
 - [Self-Hosting](/guides/self-hosting/) — Deploy your own server

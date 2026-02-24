@@ -1,9 +1,9 @@
 ---
 title: ursalock
-description: End-to-end encrypted cloud sync for Zustand stores
+description: End-to-end encrypted document storage with passkey-derived keys
 template: splash
 hero:
-  tagline: Passkey-powered E2EE sync for Zustand. No recovery key. Self-hostable.
+  tagline: Passkey-powered E2EE document storage. No recovery key. Self-hostable.
   image:
     file: ../../assets/logo-dark.svg
   actions:
@@ -21,7 +21,7 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
 ## Install
 
 ```bash
-npm install @ursalock/zustand @ursalock/client @ursalock/crypto
+npm install @ursalock/client @ursalock/crypto
 ```
 
 ## Why ursalock?
@@ -31,7 +31,7 @@ npm install @ursalock/zustand @ursalock/client @ursalock/crypto
     Your passkey derives the encryption key via WebAuthn PRF. No recovery key to lose or store.
   </Card>
   <Card title="Zero-Knowledge" icon="shield-check">
-    Data encrypted client-side before leaving browser. Server stores opaque blobs only.
+    Data encrypted client-side before leaving browser. Server stores encrypted ciphertext only.
   </Card>
   <Card title="Cross-Device Sync" icon="cloud">
     Same passkey = same encryption key. Sync seamlessly across devices.
@@ -44,32 +44,35 @@ npm install @ursalock/zustand @ursalock/client @ursalock/crypto
 ## Quick Example
 
 ```typescript
-import { create, type StateCreator } from "zustand";
-import { vault, type VaultOptionsJwk } from "@ursalock/zustand";
-import type { CipherJWK } from "@ursalock/crypto";
+import { VaultClient, DocumentClient } from "@ursalock/client";
+import { deriveVaultKeys } from "@ursalock/crypto";
 
-interface NotesState {
-  notes: string[];
-  addNote: (note: string) => void;
-}
+// 1. Authenticate with passkey
+const vaultClient = new VaultClient({ serverUrl: "https://vault.example.com" });
+const result = await signIn({ usePasskey: true });
 
-// After passkey authentication, you get a cipherJwk
-function createStore(cipherJwk: CipherJWK) {
-  const storeCreator: StateCreator<NotesState> = (set) => ({
-    notes: [],
-    addNote: (note) => set((s) => ({ notes: [...s.notes, note] })),
-  });
+// 2. Get vault and derive keys
+const res = await vaultClient.fetch("/vault/by-name/my-app");
+const { uid: vaultUid } = await res.json();
 
-  return create(vault(storeCreator, {
-    name: "my-notes",
-    cipherJwk,
-    server: "https://vault.example.com",
-    getToken: () => client.getToken(),
-  }));
-}
+const masterKey = base64urlToBytes(result.credential.cipherJwk.k);
+const keys = await deriveVaultKeys(masterKey, vaultUid);
 
-// Sync across devices
-await store.vault.sync();
+// 3. Create DocumentClient
+const docClient = new DocumentClient({
+  serverUrl: "https://vault.example.com",
+  vaultUid,
+  encryptionKey: keys.encryptionKey,
+  hmacKey: keys.hmacKey,
+  getAuthHeader: () => vaultClient.getAuthHeader(),
+});
+
+// 4. Store and retrieve encrypted documents
+const notes = docClient.collection<Note>("notes");
+
+const doc = await notes.create({ title: "Hello", content: "World" });
+const fetched = await notes.get(doc.uid);
+console.log(fetched.content); // { title: "Hello", content: "World" }
 ```
 
 ## Auth Flow
@@ -83,17 +86,43 @@ const { signIn } = useSignIn(vaultClient);
 const result = await signIn({ usePasskey: true });
 
 if (result.success) {
-  // result.credential.cipherJwk → encryption key
+  // result.credential.cipherJwk → master key for key derivation
   // result.credential.jwt → auth token
-  initStore(result.credential.cipherJwk);
+  await initVault(result.credential);
 }
+```
+
+## Integration with Zustand
+
+```typescript
+import { create } from "zustand";
+
+const useStore = create<AppState>((set) => ({
+  notes: [],
+  addNote: (note) => set((s) => ({ notes: [...s.notes, note] })),
+}));
+
+// Pull from server
+const docs = await docClient.collection<AppState>("app-state").list({ limit: 1 });
+if (docs[0]) {
+  useStore.setState(docs[0].content);
+}
+
+// Push changes (debounced)
+useStore.subscribe((state) => {
+  debouncedSync(state);
+});
 ```
 
 ## Packages
 
 | Package | Description | Size |
 |---------|-------------|------|
-| `@ursalock/crypto` | Encryption primitives (AES-256-GCM) | ~4 KB |
-| `@ursalock/zustand` | Zustand middleware | ~6 KB |
-| `@ursalock/client` | Auth client + React hooks | ~7 KB |
+| `@ursalock/crypto` | Encryption primitives (AES-256-GCM, HKDF) | ~4 KB |
+| `@ursalock/client` | Auth + DocumentClient + React hooks | ~8 KB |
 | `@ursalock/server` | Self-hosted backend | ~8 KB |
+| `@ursalock/zustand` | **Deprecated** (security bug) | - |
+
+:::caution
+`@ursalock/zustand` is deprecated due to a critical security bug that sent plaintext to the server. Use `DocumentClient` with a plain Zustand store instead.
+:::

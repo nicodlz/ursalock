@@ -3,31 +3,36 @@ title: Introduction
 description: What is ursalock and why use it
 ---
 
-ursalock adds end-to-end encrypted cloud sync to your Zustand stores using **passkey-derived keys**.
+ursalock provides end-to-end encrypted document storage using **passkey-derived keys**.
 
 ## The Problem
 
-You're building a React app with Zustand. You want to:
-- Persist state across sessions
+You're building a web app and want to:
+- Store user data securely
 - Sync data across devices
-- Keep user data truly private
+- Keep user data truly private (zero-knowledge)
 
-Zustand's `persist()` handles local storage, but:
-- Data is stored in plaintext
-- No cloud sync
-- Anyone with device access can read it
+Traditional solutions either:
+- Store data in plaintext (Firebase, Supabase)
+- Require complex key management (PGP, manual encryption)
+- Vendor lock-in with proprietary E2EE (1Password, Bitwarden)
 
 ## The Solution
 
-ursalock is a drop-in replacement for `persist()` that adds:
+ursalock provides:
 
 **Passkey-Based E2EE**
 - Your passkey derives the encryption key via WebAuthn PRF
 - No recovery key to store — your passkey IS the key
 - Same passkey = same data on any device
 
-**Zero-Knowledge Sync**
-- Server stores only encrypted blobs
+**Document-Level Storage**
+- Store encrypted documents in collections
+- Each document independently encrypted
+- Efficient syncing (only changed documents)
+
+**Zero-Knowledge Architecture**
+- Server stores only encrypted ciphertext
 - Server never sees your plaintext
 - All crypto happens client-side
 
@@ -39,28 +44,33 @@ ursalock is a drop-in replacement for `persist()` that adds:
 ## How It Works
 
 ```
-┌──────────────────────────────────────────────────┐
-│                    CLIENT                         │
-│                                                  │
-│  Passkey → PRF → cipherJwk → AES-256-GCM → Blob  │
-│                                                  │
-└────────────────────────┬─────────────────────────┘
-                         │ HTTPS (encrypted blob)
+┌──────────────────────────────────────────────────────┐
+│                      CLIENT                          │
+│                                                      │
+│  Passkey → PRF → cipherJwk → deriveVaultKeys()       │
+│                          ↓                           │
+│                   encryptionKey + hmacKey            │
+│                          ↓                           │
+│           Document → AES-256-GCM → Ciphertext        │
+│                                                      │
+└────────────────────────┬─────────────────────────────┘
+                         │ HTTPS (encrypted documents)
                          ▼
-┌──────────────────────────────────────────────────┐
-│                    SERVER                         │
-│                                                  │
-│  Receives encrypted blob → Stores in SQLite      │
-│  Server CANNOT read your data                    │
-│  Server only knows your opaqueId (hash)          │
-│                                                  │
-└──────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────┐
+│                      SERVER                          │
+│                                                      │
+│  Receives encrypted documents → Stores in SQLite    │
+│  Server CANNOT read your data                       │
+│  Server only knows document metadata (uid, version) │
+│                                                      │
+└──────────────────────────────────────────────────────┘
 ```
 
 1. **User authenticates** with their passkey
-2. **WebAuthn PRF** derives a `cipherJwk` (encryption key)
-3. **Zustand store** encrypts/decrypts with that key
-4. **Server** stores and syncs encrypted blobs
+2. **WebAuthn PRF** derives a `cipherJwk` (master key)
+3. **Vault-specific keys** derived via HKDF
+4. **Documents** encrypted/decrypted with vault keys
+5. **Server** stores and syncs encrypted documents
 
 The server never sees your encryption key or plaintext data.
 

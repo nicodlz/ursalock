@@ -9,7 +9,7 @@ ursalock uses **passkey-only** authentication via WebAuthn. The passkey not only
 
 1. **Registration**: Create a passkey → server stores your `opaqueId` (hash of passkey)
 2. **Authentication**: Use passkey → WebAuthn PRF derives your `cipherJwk`
-3. **Encryption**: Your Zustand store encrypts/decrypts using that `cipherJwk`
+3. **Encryption**: Vault-specific keys are derived from `cipherJwk` for document encryption
 
 The server never sees your passkey or encryption key — only the `opaqueId` for identification.
 

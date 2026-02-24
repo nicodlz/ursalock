@@ -128,7 +128,7 @@ Short-lived auth token:
 Encryption key derived from passkey:
 - Lives only in memory (not persisted)
 - Lost on page refresh (requires re-auth)
-- Used by `@ursalock/zustand` for encryption
+- Used for key derivation with `deriveVaultKeys()` from `@ursalock/crypto`
 
 ## Client Methods
 
@@ -169,6 +169,172 @@ Clear the session.
 ```typescript
 await vaultClient.logout();
 // Clears JWT from localStorage
+```
+
+## DocumentClient
+
+Client for document-level encrypted storage within vaults.
+
+### Setup
+
+```typescript
+import { VaultClient, DocumentClient } from "@ursalock/client";
+import { deriveVaultKeys } from "@ursalock/crypto";
+
+// 1. Auth
+const vaultClient = new VaultClient({ serverUrl: "https://vault.example.com" });
+const result = await signIn({ usePasskey: true });
+
+// 2. Get or create vault
+const res = await vaultClient.fetch("/vault/by-name/my-app");
+const { uid: vaultUid } = await res.json();
+
+// 3. Derive keys
+const masterKey = base64urlToBytes(result.credential.cipherJwk.k);
+const keys = await deriveVaultKeys(masterKey, vaultUid);
+
+// 4. Create DocumentClient
+const docClient = new DocumentClient({
+  serverUrl: "https://vault.example.com",
+  vaultUid,
+  encryptionKey: keys.encryptionKey,
+  hmacKey: keys.hmacKey,
+  getAuthHeader: () => vaultClient.getAuthHeader(),
+});
+```
+
+### Constructor Options
+
+| Option | Type | Required | Description |
+|--------|------|----------|-------------|
+| `serverUrl` | `string` | Yes | Base URL of your ursalock server |
+| `vaultUid` | `string` | Yes | UID of the vault to store documents in |
+| `encryptionKey` | `CryptoKey` | Yes | Derived encryption key |
+| `hmacKey` | `CryptoKey` | Yes | Derived HMAC key for integrity |
+| `getAuthHeader` | `() => Record<string, string>` | Yes | Function returning auth headers |
+
+### Collections
+
+Collections provide typed CRUD operations for documents.
+
+```typescript
+interface Note {
+  title: string;
+  content: string;
+}
+
+const notes = docClient.collection<Note>("notes");
+
+// Create
+const doc = await notes.create({ title: "Hello", content: "World" });
+// Returns: { uid: string, content: Note, version: number, createdAt: number, updatedAt: number }
+
+// Read
+const fetched = await notes.get(doc.uid);
+console.log(fetched.content); // { title: "Hello", content: "World" }
+
+// List
+const all = await notes.list();
+// Optional filters: notes.list({ since: timestamp, limit: 10 })
+
+// Update
+const updated = await notes.replace(
+  doc.uid,
+  { title: "Updated", content: "!" },
+  doc.version
+);
+
+// Delete
+await notes.delete(doc.uid);
+```
+
+### Single-Document Pattern
+
+For simple apps, store all state in one document:
+
+```typescript
+const state = docClient.collection<AppState>("app-state");
+
+// Pull
+const docs = await state.list({ limit: 1 });
+if (docs[0]) {
+  store.setState(docs[0].content);
+}
+
+// Push
+await state.replace(docUid, store.getState(), currentVersion);
+```
+
+### Document Type
+
+```typescript
+interface Document<T> {
+  uid: string;
+  vaultUid: string;
+  collection: string;
+  content: T;          // Decrypted plaintext object
+  version: number;
+  createdAt: number;
+  updatedAt: number;
+  deletedAt?: number;
+}
+```
+
+### Collection Methods
+
+#### create(content)
+
+Create a new document.
+
+```typescript
+const doc = await collection.create({ title: "New", content: "..." });
+```
+
+#### get(uid)
+
+Get a document by UID.
+
+```typescript
+const doc = await collection.get("doc-uid");
+```
+
+Throws if not found.
+
+#### list(options?)
+
+List all documents in the collection.
+
+```typescript
+const docs = await collection.list({
+  since: Date.now() - 86400000, // Last 24h
+  limit: 100,
+});
+```
+
+#### replace(uid, content, version)
+
+Replace a document (optimistic locking).
+
+```typescript
+try {
+  const updated = await collection.replace(uid, newContent, currentVersion);
+} catch (error) {
+  if (error.message.includes("409")) {
+    // Conflict - re-fetch and retry
+    const latest = await collection.get(uid);
+    // Merge and retry...
+  }
+}
+```
+
+Returns 409 Conflict if version doesn't match.
+
+#### delete(uid)
+
+Soft delete a document.
+
+```typescript
+await collection.delete(uid);
 ```
 
 ## Error Handling

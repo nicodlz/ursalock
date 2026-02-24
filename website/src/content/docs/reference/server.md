@@ -108,8 +108,6 @@ Response:
     {
       "uid": "abc123",
       "name": "my-store",
-      "data": "encrypted...",
-      "salt": "base64...",
       "version": 1,
       "updatedAt": 1234567890
     }
@@ -119,13 +117,13 @@ Response:
 
 #### POST /vault
 
-Create a vault.
+Create a vault (container only, no data).
 
 ```bash
 curl -X POST https://vault.example.com/vault \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
-  -d '{"name": "my-store", "data": "encrypted...", "salt": "base64..."}'
+  -d '{"name": "my-store"}'
 ```
 
 #### GET /vault/:uid
@@ -137,23 +135,193 @@ curl https://vault.example.com/vault/abc123 \
   -H "Authorization: Bearer <token>"
 ```
 
-#### PUT /vault/:uid
+Response:
+```json
+{
+  "uid": "abc123",
+  "name": "my-store",
+  "version": 1,
+  "updatedAt": 1234567890
+}
+```
 
-Update a vault.
+#### GET /vault/by-name/:name
+
+Get vault by name.
 
 ```bash
-curl -X PUT https://vault.example.com/vault/abc123 \
-  -H "Authorization: Bearer <token>" \
-  -H "Content-Type: application/json" \
-  -d '{"data": "new-encrypted...", "salt": "new-salt..."}'
+curl https://vault.example.com/vault/by-name/my-store \
+  -H "Authorization: Bearer <token>"
 ```
 
 #### DELETE /vault/:uid
 
-Delete a vault.
+Delete a vault and all its documents.
 
 ```bash
 curl -X DELETE https://vault.example.com/vault/abc123 \
+  -H "Authorization: Bearer <token>"
+```
+
+### Document Endpoints
+
+Documents are encrypted data stored within vaults. The `data` field contains base64-encoded encrypted ciphertext. The server never sees plaintext.
+
+#### POST /vaults/:vaultUid/documents
+
+Create a document in a vault.
+
+```bash
+curl -X POST https://vault.example.com/vaults/abc123/documents \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "collection": "notes",
+    "data": "base64-encrypted-data...",
+    "hmac": "optional-hmac-for-integrity"
+  }'
+```
+
+Response:
+```json
+{
+  "uid": "doc-xyz",
+  "vaultUid": "abc123",
+  "collection": "notes",
+  "data": "base64-encrypted-data...",
+  "hmac": "optional-hmac...",
+  "version": 1,
+  "createdAt": 1234567890,
+  "updatedAt": 1234567890
+}
+```
+
+#### GET /vaults/:vaultUid/documents
+
+List documents in a vault.
+
+Query parameters:
+- `collection` — Filter by collection name
+- `since` — Only return documents updated after this timestamp (milliseconds)
+- `limit` — Maximum number of documents to return
+
+```bash
+curl "https://vault.example.com/vaults/abc123/documents?collection=notes&since=1234567890" \
+  -H "Authorization: Bearer <token>"
+```
+
+Response:
+```json
+{
+  "documents": [
+    {
+      "uid": "doc-xyz",
+      "vaultUid": "abc123",
+      "collection": "notes",
+      "data": "base64-encrypted-data...",
+      "hmac": "optional-hmac...",
+      "version": 1,
+      "createdAt": 1234567890,
+      "updatedAt": 1234567890,
+      "deletedAt": null
+    }
+  ]
+}
+```
+
+#### GET /vaults/:vaultUid/documents/:uid
+
+Get a specific document.
+
+```bash
+curl https://vault.example.com/vaults/abc123/documents/doc-xyz \
+  -H "Authorization: Bearer <token>"
+```
+
+#### PUT /vaults/:vaultUid/documents/:uid
+
+Update a document.
+
+```bash
+curl -X PUT https://vault.example.com/vaults/abc123/documents/doc-xyz \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": "new-encrypted-data...",
+    "hmac": "new-hmac...",
+    "version": 1
+  }'
+```
+
+Returns 409 Conflict if the version doesn't match (optimistic locking for conflict resolution).
+
+#### DELETE /vaults/:vaultUid/documents/:uid
+
+Soft delete a document (sets `deletedAt` timestamp).
+
+```bash
+curl -X DELETE https://vault.example.com/vaults/abc123/documents/doc-xyz \
+  -H "Authorization: Bearer <token>"
+```
+
+### API Key Endpoints
+
+API keys provide programmatic access without user passwords.
+
+#### POST /auth/api-keys
+
+Create an API key.
+
+```bash
+curl -X POST https://vault.example.com/auth/api-keys \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "My App Key", "expiresAt": 1735689600000}'
+```
+
+Response:
+```json
+{
+  "uid": "key-123",
+  "name": "My App Key",
+  "key": "urs_abc123...",
+  "expiresAt": 1735689600000,
+  "createdAt": 1234567890
+}
+```
+
+**Note:** The `key` field is only returned once at creation. Store it securely.
+
+#### GET /auth/api-keys
+
+List API keys for the current user.
+
+```bash
+curl https://vault.example.com/auth/api-keys \
+  -H "Authorization: Bearer <token>"
+```
+
+Response:
+```json
+{
+  "keys": [
+    {
+      "uid": "key-123",
+      "name": "My App Key",
+      "expiresAt": 1735689600000,
+      "createdAt": 1234567890,
+      "lastUsedAt": 1234567890
+    }
+  ]
+}
+```
+
+#### DELETE /auth/api-keys/:uid
+
+Revoke an API key.
+
+```bash
+curl -X DELETE https://vault.example.com/auth/api-keys/key-123 \
   -H "Authorization: Bearer <token>"
 ```
 
@@ -185,12 +353,34 @@ CREATE TABLE vaults (
   uid TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users(id),
   name TEXT NOT NULL,
-  data TEXT NOT NULL,
-  salt TEXT NOT NULL,
   version INTEGER DEFAULT 1,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
   UNIQUE(user_id, name)
+);
+
+CREATE TABLE documents (
+  uid TEXT PRIMARY KEY,
+  vault_uid TEXT NOT NULL REFERENCES vaults(uid) ON DELETE CASCADE,
+  collection TEXT NOT NULL,
+  data TEXT NOT NULL,
+  hmac TEXT,
+  version INTEGER DEFAULT 1,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  deleted_at INTEGER,
+  INDEX(vault_uid, collection),
+  INDEX(vault_uid, updated_at)
+);
+
+CREATE TABLE api_keys (
+  uid TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id),
+  name TEXT NOT NULL,
+  key_hash TEXT NOT NULL,
+  expires_at INTEGER,
+  last_used_at INTEGER,
+  created_at INTEGER NOT NULL
 );
 
 CREATE TABLE refresh_tokens (
