@@ -1,6 +1,8 @@
 /**
  * Concrete vault repository implementation
  * Wraps existing DB client functions
+ * 
+ * Vaults are now containers for documents only. They do not store encrypted blobs directly.
  */
 
 import type { IVaultRepository, VaultEntity } from "#interfaces/repositories.js";
@@ -9,7 +11,6 @@ import {
   getVaultByUid,
   getVaultByName,
   getVaultsByUserId,
-  updateVault,
   deleteVault,
 } from "#db/client.js";
 
@@ -21,8 +22,6 @@ export class VaultRepository implements IVaultRepository {
   create(vault: {
     userId: number;
     name: string;
-    data: string;
-    salt: string;
   }): VaultEntity {
     return createVault(vault);
   }
@@ -37,18 +36,6 @@ export class VaultRepository implements IVaultRepository {
 
   findByUserId(userId: number): VaultEntity[] {
     return getVaultsByUserId(userId);
-  }
-
-  update(
-    uid: string,
-    userId: number,
-    data: {
-      data: string;
-      salt: string;
-      version?: number;
-    }
-  ): VaultEntity | undefined {
-    return updateVault(uid, userId, data);
   }
 
   delete(uid: string, userId: number): boolean {

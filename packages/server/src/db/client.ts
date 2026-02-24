@@ -319,72 +319,49 @@ export function deleteExpiredSessions(): number {
 export interface CreateVaultInput {
   userId: number;
   name: string;
-  data: string;
-  salt: string;
-  version?: number;
 }
 
-export function createVault(input: CreateVaultInput): Vault {
+/**
+ * Create a vault container
+ * Vaults no longer store encrypted blobs directly - use the Document API instead
+ */
+export function createVault(input: CreateVaultInput): Omit<Vault, "data" | "salt"> {
   const db = getDb();
+  // Store empty strings for data/salt for backward DB compatibility
   const stmt = db.prepare(`
     INSERT INTO vaults (user_id, name, data, salt, version)
-    VALUES (?, ?, ?, ?, ?)
-    RETURNING id, uid, user_id as userId, name, data, salt, version, created_at as createdAt, updated_at as updatedAt
+    VALUES (?, ?, '', '', 1)
+    RETURNING id, uid, user_id as userId, name, version, created_at as createdAt, updated_at as updatedAt
   `);
-  return stmt.get(input.userId, input.name, input.data, input.salt, input.version ?? 1) as Vault;
+  return stmt.get(input.userId, input.name) as Omit<Vault, "data" | "salt">;
 }
 
-export function getVaultByUid(uid: string, userId: number): Vault | undefined {
+export function getVaultByUid(uid: string, userId: number): Omit<Vault, "data" | "salt"> | undefined {
   const db = getDb();
   const stmt = db.prepare(`
-    SELECT id, uid, user_id as userId, name, data, salt, version, created_at as createdAt, updated_at as updatedAt
+    SELECT id, uid, user_id as userId, name, version, created_at as createdAt, updated_at as updatedAt
     FROM vaults WHERE uid = ? AND user_id = ?
   `);
-  return stmt.get(uid, userId) as Vault | undefined;
+  return stmt.get(uid, userId) as Omit<Vault, "data" | "salt"> | undefined;
 }
 
-export function getVaultByName(name: string, userId: number): Vault | undefined {
+export function getVaultByName(name: string, userId: number): Omit<Vault, "data" | "salt"> | undefined {
   const db = getDb();
   const stmt = db.prepare(`
-    SELECT id, uid, user_id as userId, name, data, salt, version, created_at as createdAt, updated_at as updatedAt
+    SELECT id, uid, user_id as userId, name, version, created_at as createdAt, updated_at as updatedAt
     FROM vaults WHERE name = ? AND user_id = ?
   `);
-  return stmt.get(name, userId) as Vault | undefined;
+  return stmt.get(name, userId) as Omit<Vault, "data" | "salt"> | undefined;
 }
 
-export function getVaultsByUserId(userId: number): Vault[] {
+export function getVaultsByUserId(userId: number): Omit<Vault, "data" | "salt">[] {
   const db = getDb();
   const stmt = db.prepare(`
-    SELECT id, uid, user_id as userId, name, data, salt, version, created_at as createdAt, updated_at as updatedAt
+    SELECT id, uid, user_id as userId, name, version, created_at as createdAt, updated_at as updatedAt
     FROM vaults WHERE user_id = ?
     ORDER BY updated_at DESC
   `);
-  return stmt.all(userId) as Vault[];
-}
-
-export interface UpdateVaultInput {
-  data: string;
-  salt: string;
-  version?: number;
-}
-
-export function updateVault(uid: string, userId: number, input: UpdateVaultInput): Vault | undefined {
-  const db = getDb();
-  if (input.version != null) {
-    // Optimistic locking: only update if version matches
-    const stmt = db.prepare(`
-      UPDATE vaults SET data = ?, salt = ?, version = ? + 1, updated_at = unixepoch()
-      WHERE uid = ? AND user_id = ? AND version = ?
-      RETURNING id, uid, user_id as userId, name, data, salt, version, created_at as createdAt, updated_at as updatedAt
-    `);
-    return stmt.get(input.data, input.salt, input.version, uid, userId, input.version) as Vault | undefined;
-  }
-  const stmt = db.prepare(`
-    UPDATE vaults SET data = ?, salt = ?, version = version + 1, updated_at = unixepoch()
-    WHERE uid = ? AND user_id = ?
-    RETURNING id, uid, user_id as userId, name, data, salt, version, created_at as createdAt, updated_at as updatedAt
-  `);
-  return stmt.get(input.data, input.salt, uid, userId) as Vault | undefined;
+  return stmt.all(userId) as Omit<Vault, "data" | "salt">[];
 }
 
 export function deleteVault(uid: string, userId: number): boolean {

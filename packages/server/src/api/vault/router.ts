@@ -1,5 +1,11 @@
 /**
- * Vault router - encrypted blob storage CRUD
+ * Vault router - vault container management
+ * 
+ * Vaults are now containers for documents only. They do not store encrypted blobs directly.
+ * Use the Document API (@ursalock/client DocumentClient) for storing encrypted data.
+ * 
+ * BREAKING CHANGE: Vault create no longer accepts data/salt fields.
+ * Vault update endpoint removed entirely.
  * 
  * Refactored to follow SOLID principles:
  * - Uses VaultService for business logic (Single Responsibility)
@@ -12,7 +18,6 @@ import { zValidator } from "@hono/zod-validator";
 import { requireAuthMiddleware, requirePermission, requireVaultAccess, type SessionContext } from "#features/auth/middleware.js";
 import {
   CreateVaultRequest,
-  UpdateVaultRequest,
 } from "#api/schemas.js";
 import { VaultService } from "#services/vault-service.js";
 import { VaultRepository } from "#repositories/vault-repository.js";
@@ -28,7 +33,7 @@ export const vaultRouter = new Hono<{
   // All vault routes require authentication
   .use("/*", requireAuthMiddleware)
 
-  // List all vaults for user
+  // List all vault containers for user
   .get(
     "/",
     requirePermission("read"),
@@ -48,7 +53,7 @@ export const vaultRouter = new Hono<{
     },
   )
 
-  // Get vault by name (for sync engine)
+  // Get vault container by name (for sync engine)
   .get(
     "/by-name/:name",
     requirePermission("read"),
@@ -66,7 +71,7 @@ export const vaultRouter = new Hono<{
     },
   )
 
-  // Get vault by UID
+  // Get vault container by UID
   .get(
     "/:uid",
     requirePermission("read"),
@@ -78,38 +83,22 @@ export const vaultRouter = new Hono<{
     },
   )
 
-  // Create new vault
+  // Create new vault container
   .post(
     "/",
     requirePermission("write"),
     zValidator("json", CreateVaultRequest),
     (c) => {
       const session = c.get("session");
-      const { name, data, salt } = c.req.valid("json");
+      const { name } = c.req.valid("json");
       return c.json(
-        vaultService.createVault(session.user.id, { name, data, salt }),
+        vaultService.createVault(session.user.id, { name }),
         201
       );
     },
   )
 
-  // Update vault
-  .put(
-    "/:uid",
-    requirePermission("write"),
-    requireVaultAccess,
-    zValidator("json", UpdateVaultRequest),
-    (c) => {
-      const session = c.get("session");
-      const { uid } = c.req.param();
-      const { data, salt, version } = c.req.valid("json");
-      return c.json(
-        vaultService.updateVault(uid, session.user.id, { data, salt, version })
-      );
-    },
-  )
-
-  // Delete vault
+  // Delete vault container
   .delete(
     "/:uid",
     requirePermission("delete"),

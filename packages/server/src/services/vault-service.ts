@@ -1,6 +1,9 @@
 /**
  * Vault service - business logic layer
  * Follows Single Responsibility Principle - separates business logic from routing
+ * 
+ * Vaults are now containers for documents only. They do not store encrypted blobs directly.
+ * Use the Document API (@ursalock/client DocumentClient) for storing encrypted data.
  */
 
 import type { IVaultRepository, VaultEntity } from "#interfaces/repositories.js";
@@ -15,8 +18,6 @@ function toVaultResponse(vault: VaultEntity): VaultResponse {
   return {
     uid: vault.uid,
     name: vault.name,
-    data: vault.data,
-    salt: vault.salt,
     version: vault.version,
     updatedAt: vault.updatedAt,
   };
@@ -24,14 +25,14 @@ function toVaultResponse(vault: VaultEntity): VaultResponse {
 
 /**
  * Vault service
- * Contains business logic for vault operations
+ * Contains business logic for vault container operations
  * Depends on IVaultRepository abstraction (Dependency Inversion)
  */
 export class VaultService {
   constructor(private vaultRepo: IVaultRepository) {}
 
   /**
-   * List all vaults for a user
+   * List all vault containers for a user
    */
   listVaults(userId: number): VaultsListResponse {
     const vaults = this.vaultRepo.findByUserId(userId);
@@ -41,7 +42,7 @@ export class VaultService {
   }
 
   /**
-   * Get vault by name
+   * Get vault container by name
    */
   getVaultByName(name: string, userId: number): VaultResponse {
     const vault = this.vaultRepo.findByName(name, userId);
@@ -52,7 +53,7 @@ export class VaultService {
   }
 
   /**
-   * Get vault by UID
+   * Get vault container by UID
    */
   getVaultByUid(uid: string, userId: number): VaultResponse {
     const vault = this.vaultRepo.findByUid(uid, userId);
@@ -63,11 +64,11 @@ export class VaultService {
   }
 
   /**
-   * Create a new vault
+   * Create a new vault container
    */
   createVault(
     userId: number,
-    data: { name: string; data: string; salt: string }
+    data: { name: string }
   ): VaultResponse {
     // Check if vault with same name exists
     const existing = this.vaultRepo.findByName(data.name, userId);
@@ -78,37 +79,13 @@ export class VaultService {
     const vault = this.vaultRepo.create({
       userId,
       name: data.name,
-      data: data.data,
-      salt: data.salt,
     });
 
     return toVaultResponse(vault);
   }
 
   /**
-   * Update a vault
-   */
-  updateVault(
-    uid: string,
-    userId: number,
-    data: { data: string; salt: string; version?: number }
-  ): VaultResponse {
-    const vault = this.vaultRepo.update(uid, userId, data);
-    if (!vault) {
-      // If version was provided, check if vault exists to distinguish 404 vs 409
-      if (data.version != null) {
-        const existing = this.vaultRepo.findByUid(uid, userId);
-        if (existing) {
-          throw new ApiException(errors.vault_conflict, 409);
-        }
-      }
-      throw new ApiException(errors.vault_not_found, 404);
-    }
-    return toVaultResponse(vault);
-  }
-
-  /**
-   * Delete a vault
+   * Delete a vault container
    */
   deleteVault(uid: string, userId: number): { success: boolean } {
     const deleted = this.vaultRepo.delete(uid, userId);

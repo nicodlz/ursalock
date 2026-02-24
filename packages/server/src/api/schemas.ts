@@ -91,9 +91,6 @@ export type PasskeyLoginVerifyRequest = z.infer<typeof PasskeyLoginVerifyRequest
 /** Maximum encrypted data size (5 MB) */
 const MAX_DATA_SIZE = 5 * 1024 * 1024;
 
-/** Maximum salt length in characters */
-const MAX_SALT_LENGTH = 64;
-
 /** Base64 (standard + url-safe) pattern */
 const BASE64_RE = /^[A-Za-z0-9+/\-_=]*$/;
 
@@ -102,6 +99,9 @@ const VAULT_NAME_RE = /^[A-Za-z0-9_-]+$/;
 
 /**
  * Create vault request
+ *
+ * Vaults are now containers for documents only. They do not store encrypted blobs directly.
+ * Use the Document API (@ursalock/client DocumentClient) for storing encrypted data.
  *
  * NOTE: The `name` field is currently sent in plaintext. In a future version,
  * clients should send a deterministic hash or client-encrypted value to prevent
@@ -114,37 +114,13 @@ export const CreateVaultRequest = z.object({
     .min(1)
     .max(255)
     .regex(VAULT_NAME_RE, "Name must be alphanumeric (hyphens and underscores allowed)"),
-  data: z
-    .string()
-    .max(MAX_DATA_SIZE, `Data must not exceed ${MAX_DATA_SIZE} bytes`)
-    .regex(BASE64_RE, "Data must be valid base64"),
-  salt: z
-    .string()
-    .max(MAX_SALT_LENGTH, `Salt must not exceed ${MAX_SALT_LENGTH} characters`)
-    .regex(BASE64_RE, "Salt must be valid base64"),
 });
 export type CreateVaultRequest = z.infer<typeof CreateVaultRequest>;
 
-/** Update vault request */
-export const UpdateVaultRequest = z.object({
-  data: z
-    .string()
-    .max(MAX_DATA_SIZE, `Data must not exceed ${MAX_DATA_SIZE} bytes`)
-    .regex(BASE64_RE, "Data must be valid base64"),
-  salt: z
-    .string()
-    .max(MAX_SALT_LENGTH, `Salt must not exceed ${MAX_SALT_LENGTH} characters`)
-    .regex(BASE64_RE, "Salt must be valid base64"),
-  version: z.number().optional(),
-});
-export type UpdateVaultRequest = z.infer<typeof UpdateVaultRequest>;
-
-/** Vault response */
+/** Vault response (container metadata only) */
 export const VaultResponse = z.object({
   uid: z.string(),
   name: z.string(),
-  data: z.string(),
-  salt: z.string(),
   version: z.number(),
   updatedAt: z.number(),
 });

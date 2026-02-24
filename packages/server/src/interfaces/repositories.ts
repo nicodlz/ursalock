@@ -3,13 +3,11 @@
  * Follows Dependency Inversion Principle - controllers depend on abstractions
  */
 
-/** Vault entity from database */
+/** Vault entity from database (container metadata only) */
 export interface VaultEntity {
   uid: string;
   userId: number;
   name: string;
-  data: string;
-  salt: string;
   version: number;
   createdAt: number;
   updatedAt: number;
@@ -31,17 +29,15 @@ export interface DocumentEntity {
 
 /**
  * Vault repository interface
- * Abstracts database operations for vaults
+ * Abstracts database operations for vaults (containers only)
  */
 export interface IVaultRepository {
   /**
-   * Create a new vault
+   * Create a new vault container
    */
   create(vault: {
     userId: number;
     name: string;
-    data: string;
-    salt: string;
   }): VaultEntity;
 
   /**
@@ -60,20 +56,7 @@ export interface IVaultRepository {
   findByUserId(userId: number): VaultEntity[];
 
   /**
-   * Update a vault
-   */
-  update(
-    uid: string,
-    userId: number,
-    data: {
-      data: string;
-      salt: string;
-      version?: number;
-    }
-  ): VaultEntity | undefined;
-
-  /**
-   * Delete a vault
+   * Delete a vault container
    */
   delete(uid: string, userId: number): boolean;
 }
